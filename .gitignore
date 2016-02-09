@@ -131,6 +131,7 @@ doc/
 #==============================================================================#
 .idea
 *.iml
+CMakeLists.txt
 
 #==============================================================================#
 # Code Coverage files
@@ -145,3 +146,8 @@ doc/
 *.jar
 scripts/PelotonTest/out
 scripts/PelotonTest/lib
+
+.vagrant
+Vagrantfile
+sync.sh
+CMakeLists.txt

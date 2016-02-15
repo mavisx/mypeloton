@@ -34,11 +34,9 @@
 /GSYMS
 /GTAGS
 .gitusers
-autom4te.cache
 cscope.files
 cscope.out
 autoconf/aclocal.m4
-autoconf/autom4te.cache
 /compile_commands.json
 
 #==============================================================================#
@@ -80,7 +78,6 @@ build/
 *.o
 *.lo
 *.la
-*~
 *.pdf
 *.swp
 a.out
@@ -95,7 +92,6 @@ a.out
 # Backup artifacts
 #==============================================================================#
 ~*
-*~
 tmp/
  
 #==============================================================================#
@@ -147,7 +143,6 @@ CMakeLists.txt
 scripts/PelotonTest/out
 scripts/PelotonTest/lib
 
-<<<<<<< HEAD
 #==============================================================================#
 # Third party
 #==============================================================================#
@@ -157,9 +152,5 @@ third_party/nanomsg
 # local helper utils
 #==============================================================================#
 /sync.sh
-=======
-.vagrant
-Vagrantfile
-sync.sh
-CMakeLists.txt
->>>>>>> fbb8212b6e8f8d8529a90eefcfec75a22630a12f
+handin.tar
+handin

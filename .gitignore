@@ -147,6 +147,7 @@ CMakeLists.txt
 scripts/PelotonTest/out
 scripts/PelotonTest/lib
 
+<<<<<<< HEAD
 #==============================================================================#
 # Third party
 #==============================================================================#
@@ -156,3 +157,9 @@ third_party/nanomsg
 # local helper utils
 #==============================================================================#
 /sync.sh
+=======
+.vagrant
+Vagrantfile
+sync.sh
+CMakeLists.txt
+>>>>>>> fbb8212b6e8f8d8529a90eefcfec75a22630a12f

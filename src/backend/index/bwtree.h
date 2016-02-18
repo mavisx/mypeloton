@@ -13,11 +13,11 @@
 #pragma once
 
 
-#define BWTREE_NODE_SIZE  4
+#define BWTREE_NODE_SIZE  64
 
 #define BWTREE_MAX(a,b)       ((a) < (b) ? (b) : (a))
 
-#define MAX_DELTA_CHAIN_LEN   64
+#define MAX_DELTA_CHAIN_LEN   8
 
 
 namespace peloton {

@@ -17,6 +17,7 @@
 #include <bits/unordered_map.h>
 #include <stddef.h>
 #include <assert.h>
+#include <unordered_map>
 #include "../common/types.h"
 #include "../storage/tuple.h"
 
@@ -264,6 +265,9 @@ typedef long long PidType;
   struct DeleteIndexDelta : public Node {
 
   };
+
+  //private functions, invisible to users -leiqi
+  PidType Search<typename KeyType>(PidType rootpid, KeyType key);
 
   //public method exposed to users -mavis
   bool InsertEntry<typename KeyType, typename ValueType>( KeyType key, ValueType value );

@@ -69,6 +69,8 @@ class BwTree {
   /// merged or slots shifted from it's siblings.
   static const unsigned short mininnerslots = (innerslotmax / 2);
 
+  // We need a root node
+  PidType  root;
 
  private:
   struct Node;
@@ -99,6 +101,8 @@ typedef long long PidType;
 
     // Delta chain next pointer
     Node *next;
+    // Do we need a prev pointer? -mavis
+    Node *prev;
 
     // Length of current delta chain
     size_t delta_list_len;
@@ -128,7 +132,7 @@ typedef long long PidType;
   struct InnerNode : public Node
   {
     /// Define an related allocator for the inner_node structs.
-    // typedef typename _Alloc::template rebind<inner_node>::other alloc_type;
+    // typedef typename _Alloc::template rebind<inner_node>::other alloc_type
 
     /// Keys of children or data pointers,
     //  we plus one so as to avoid overflow when consolidation
@@ -230,6 +234,10 @@ typedef long long PidType;
 
   // Delta Node for record update operation
   struct RecordDelta : public Node {
+
+    //construction added -mavis
+    RecordDelta(){ this->node_type = RECORD_DELTA; }
+
     enum RecordType
     {
       INSERT = 0,

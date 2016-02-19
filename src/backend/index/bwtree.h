@@ -71,7 +71,7 @@ class BwTree {
 
  private:
   struct Node;
-  typedef long long PidType;
+typedef long long PidType;
 
   enum NodeType
   {
@@ -90,7 +90,7 @@ class BwTree {
   /**
    * The Node inheritance hierachy
    * **/
-  class Node
+  struct Node
   {
     /// Number of key slotuse use, so number of valid children or data
     /// pointers
@@ -124,7 +124,7 @@ class BwTree {
 
   /// Extended structure of a inner node in-memory. Contains only keys and no
   /// data items.
-  class InnerNode : public Node
+  struct InnerNode : public Node
   {
     /// Define an related allocator for the inner_node structs.
     // typedef typename _Alloc::template rebind<inner_node>::other alloc_type;
@@ -165,7 +165,7 @@ class BwTree {
   /// Extended structure of a leaf node in memory. Contains pairs of keys and
   /// data items. Key and data slots are kept in separate arrays, because the
   /// key array is traversed very often compared to accessing the data items.
-  class LeafNode : public Node
+  struct LeafNode : public Node
   {
     /// Define an related allocator for the leaf_node structs.
 //    typedef typename _Alloc::template rebind<LeafNode>::other alloc_type;
@@ -228,7 +228,7 @@ class BwTree {
   };
 
   // Delta Node for record update operation
-  class RecordDelta : public Node {
+  struct RecordDelta : public Node {
     enum RecordType
     {
       INSERT = 0,
@@ -242,26 +242,26 @@ class BwTree {
   };
 
   // Delta Node for spliting operation
-  class SplitDelta : public Node {
+  struct SplitDelta : public Node {
     KeyType Kp;
     PidType pQ;
   };
 
-  class IndexEntryDelta : public Node {
+  struct IndexEntryDelta : public Node {
     KeyType Kp, Kq;
     PidType pQ;
   };
 
   // Delta Node for merging operation
-  class RemoveDelta : public Node {
+  struct RemoveDelta : public Node {
 
   };
 
-  class MergeDelta : public Node {
+  struct MergeDelta : public Node {
 
   };
 
-  class DeleteIndexDelta : public Node {
+  struct DeleteIndexDelta : public Node {
 
   };
 
@@ -269,8 +269,11 @@ class BwTree {
   bool InsertEntry<typename KeyType, typename ValueType>( KeyType key, ValueType value );
   bool DeleteEntry<typename KeyType, typename ValueType>( KeyType key);
   bool UpdateEntry<typename KeyType, typename ValueType>( KeyType key, ValueType value );
-
   //interfaces of SCAN to be added -mavis
+
+  //private fuctions, invisible to users -mavis
+  bool Prepend(Node* delta_node, PidType orig_pid);
+  //end -mavis
 
 };
 

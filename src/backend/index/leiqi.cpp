@@ -14,15 +14,14 @@
 #include "bwtree.h"
 
 namespace peloton {
-    namespace index {
+namespace index {
 
 // Add your function definitions here
     template<typename KeyType>
     PidType BwTree::Search(PidType rootpid, KeyType key) {
-
     }
 
 
 
-    }  // End index namespace
+}  // End index namespace
 }  // End peloton namespace

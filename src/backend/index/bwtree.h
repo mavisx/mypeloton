@@ -13,6 +13,13 @@
 #pragma once
 
 
+#include <bits/stl_pair.h>
+#include <bits/unordered_map.h>
+#include <stddef.h>
+#include <assert.h>
+#include "../common/types.h"
+#include "../storage/tuple.h"
+
 #define BWTREE_NODE_SIZE  64
 
 #define BWTREE_MAX(a,b)       ((a) < (b) ? (b) : (a))
@@ -83,7 +90,7 @@ class BwTree {
   /**
    * The Node inheritance hierachy
    * **/
-  struct Node
+  class Node
   {
     /// Number of key slotuse use, so number of valid children or data
     /// pointers
@@ -117,7 +124,7 @@ class BwTree {
 
   /// Extended structure of a inner node in-memory. Contains only keys and no
   /// data items.
-  struct InnerNode : public Node
+  class InnerNode : public Node
   {
     /// Define an related allocator for the inner_node structs.
     // typedef typename _Alloc::template rebind<inner_node>::other alloc_type;
@@ -158,7 +165,7 @@ class BwTree {
   /// Extended structure of a leaf node in memory. Contains pairs of keys and
   /// data items. Key and data slots are kept in separate arrays, because the
   /// key array is traversed very often compared to accessing the data items.
-  struct LeafNode : public Node
+  class LeafNode : public Node
   {
     /// Define an related allocator for the leaf_node structs.
 //    typedef typename _Alloc::template rebind<LeafNode>::other alloc_type;
@@ -221,7 +228,7 @@ class BwTree {
   };
 
   // Delta Node for record update operation
-  struct RecordDelta : public Node {
+  class RecordDelta : public Node {
     enum RecordType
     {
       INSERT = 0,
@@ -235,29 +242,35 @@ class BwTree {
   };
 
   // Delta Node for spliting operation
-  struct SplitDelta : public Node {
+  class SplitDelta : public Node {
     KeyType Kp;
     PidType pQ;
   };
 
-  struct IndexEntryDelta : public Node {
+  class IndexEntryDelta : public Node {
     KeyType Kp, Kq;
     PidType pQ;
   };
 
   // Delta Node for merging operation
-  struct RemoveDelta : public Node {
+  class RemoveDelta : public Node {
 
   };
 
-  struct MergeDelta : public Node {
+  class MergeDelta : public Node {
 
   };
 
-  struct DeleteIndexDelta : public Node {
+  class DeleteIndexDelta : public Node {
 
   };
 
+  //public method exposed to users -mavis
+  bool InsertEntry<typename KeyType, typename ValueType>( KeyType key, ValueType value );
+  bool DeleteEntry<typename KeyType, typename ValueType>( KeyType key);
+  bool UpdateEntry<typename KeyType, typename ValueType>( KeyType key, ValueType value );
+
+  //interfaces of SCAN to be added -mavis
 
 };
 

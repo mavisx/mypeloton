@@ -12,9 +12,6 @@
 
 #pragma once
 
-
-#include <bits/stl_pair.h>
-#include <bits/unordered_map.h>
 #include <stddef.h>
 #include <assert.h>
 #include <unordered_map>
@@ -41,7 +38,7 @@ class BwTree {
   // *** Constructed Types
 
   /// Typedef of our own type
-  typedef BwTree<KeyType, ValueType, KeyComparator> BwTreeSelf;
+  typedef BwTree<KeyType, ValueType, KeyComparator, KeyEqualityChecker> BwTreeSelf;
 
   /// Size type used to count keys
   typedef size_t                              SizeType;
@@ -101,8 +98,6 @@ typedef long long PidType;
 
     // Delta chain next pointer
     Node *next;
-    // Do we need a prev pointer? -mavis
-    Node *prev;
 
     // Length of current delta chain
     size_t delta_list_len;

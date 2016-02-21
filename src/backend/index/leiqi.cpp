@@ -53,6 +53,11 @@ namespace index {
       case SPLIT_DELTA:
         LOG_INFO("Search Range Info: meet split/merge delta");
         if(key >= ((MergeDelta)node)->Kp) {
+          node = mapping_table.get(((MergeDelta)node).pQ);
+          if(node == NULL) {
+            LOG_ERROR("pid in split/merge delta in not exist");
+            return -1;
+          }
           return search()
         }
       default:

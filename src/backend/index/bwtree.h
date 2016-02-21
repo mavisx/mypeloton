@@ -78,7 +78,7 @@ public:
 
   /// Base B+ tree parameter: The number of key slots in each inner node,
   /// this can differ from slots in each leaf.
-  static const unsigned short  innerslotmax = BWTREE_MAX( 8, BWTREE_NODE_SIZE / (sizeof(KeyType) + sizeof(void*)) );
+  static const unsigned short  innerslotmax = BWTREE_MAX( 8, BWTREE_NODE_SIZE / (sizeof(KeyType) + sizeof(PidType)) );
 
   /// Computed B+ tree parameter: The minimum number of key/data slots used
   /// in a leaf. If fewer slots are used, the leaf will be merged or slots
@@ -119,6 +119,9 @@ private:
     /// Number of key slotuse use, so number of valid children or data
     /// pointers
     unsigned short  slotuse;
+
+    // flag to indicate whether this chain belongs to a leaf node
+    bool is_leaf;
 
     // Delta chain next pointer
     Node *next;

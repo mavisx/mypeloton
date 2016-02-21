@@ -15,6 +15,7 @@
 #include <stddef.h>
 #include <assert.h>
 #include <unordered_map>
+#include <stack>
 #include "../common/types.h"
 #include "../storage/tuple.h"
 
@@ -121,6 +122,9 @@ private:
 
     // Delta chain next pointer
     Node *next;
+
+    // Node pid
+    PidType pid;
 
     // Length of current delta chain
     size_t delta_list_len;
@@ -269,8 +273,8 @@ private:
   struct SplitDelta : public Node {
 
     SplitDelta(Node *next, KeyType Kp, PidType pQ)
-        : Node(NodeType::SPLIT_DELTA, next, next->delta_list_len+1), Kp(Kp), pQ(pQ) {}
-
+        : Node(NodeType::SPLIT_DELTA, next, next->delta_list_len+1),
+          Kp(Kp), pQ(pQ) {}
     KeyType Kp;
     PidType pQ;
   };
@@ -279,7 +283,6 @@ private:
     IndexEntryDelta(Node *next, KeyType Kp, KeyType Kq, PidType pQ)
         : Node(NodeType::INDEX_ENTRY_DELTA, next, next->delta_list_len+1),
           Kp(Kp), Kq(Kq), pQ(pQ) {}
-
     KeyType Kp, Kq;
     PidType pQ;
   };
@@ -290,7 +293,10 @@ private:
   };
 
   struct MergeDelta : public Node {
-    MergeDelta(Node *next) : Node(NodeType::MERGE_DELTA, next, next->delta_list_len+1) {}
+    MergeDelta(Node *next) : Node(NodeType::MERGE_DELTA, next, next->delta_list_len+1),
+                             Kp(Kp), pQ(pQ) {}
+    KeyType Kp;
+    PidType pQ;
   };
 
   struct DeleteIndexDelta : public Node {
@@ -317,7 +323,8 @@ public:
    ************************************************
    */
 
-  PidType Search<typename KeyType>(PidType rootpid, KeyType key);
+  std::stack<PidType> search<typename KeyType>(PidType rootpid, KeyType key);
+  std::stack<PidType> search<typename KeyType>search(Node* node, KeyType key);
 
   // True if a < b ? "constructed" from m_key_less()
   inline bool operator<(const KeyType &a, const KeyType b) const

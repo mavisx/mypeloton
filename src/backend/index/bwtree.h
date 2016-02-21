@@ -330,6 +330,8 @@ public:
   std::stack<PidType> search<typename KeyType>(PidType rootpid, KeyType key);
   PidType search<typename KeyType>(Node* node, KeyType key, std::stack<PidType>& path);
 
+  bool is_in<typename KeyType>( KeyType key, Node** nptr);
+
   // True if a < b ? "constructed" from m_key_less()
   inline bool operator<(const KeyType &a, const KeyType b) const
   {
@@ -368,7 +370,7 @@ public:
 
   //public method exposed to users -mavis
   bool InsertEntry<typename KeyType, typename ValueType>( KeyType key, ValueType value );
-  bool DeleteEntry<typename KeyType, typename ValueType>( KeyType key);
+  bool DeleteEntry<typename KeyType>( KeyType key);
   bool UpdateEntry<typename KeyType, typename ValueType>( KeyType key, ValueType value );
   //interfaces of SCAN to be added -mavis
 

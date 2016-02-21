@@ -23,7 +23,10 @@ namespace index {
   std::stack<PidType> BWTree::search(PidType pid, KeyType key) {
     auto node = mapping_table.get( pid );
     if(node == nullptr)
-      return -1;
+    {
+      std::stack<PidType> empty_res;
+      return empty_res;
+    }
     std::stack<PidType> path;
     path.push(pid);
     PidType res = search(node, key, path);
@@ -40,10 +43,10 @@ namespace index {
   PidType BWTree::search(Node* node, KeyType key, std::stack<PidType>& path) {
     //should always kep track of right key range even in delta node
     PidType pid;
-    if(key < node->low_key || key >= node->high_key) {
-      LOG_ERROR("Search Range Err: key not in range");
-      return -1;
-    }
+//    if(key < node->low_key || key >= node->high_key) {
+//      LOG_ERROR("Search Range Err: key not in range");
+//      return -1;
+//    }
     switch(node->node_type) {
       case LEAF:
       case RECORD_DELTA:
@@ -84,6 +87,17 @@ namespace index {
           return search(node, key, path);
         }
       case MERGE_DELTA:
+        LOG_INFO("Search Range Info: meet merge delta");
+        pid= ((MergeDelta *)node)->pQ;
+        if(key >= ((MergeDelta *)node)->Kp) {
+          node = mapping_table.get(pid);
+          if(node == nullptr) {
+            LOG_ERROR("pid in split delta not exist");
+            return -1;
+          }
+          return search(node, key, path);
+        }
+        return search(node->next, key, path);
       case SPLIT_DELTA:
         LOG_INFO("Search Range Info: meet split/merge delta");
         pid= ((MergeDelta *)node)->pQ;
@@ -124,9 +138,27 @@ namespace index {
   }
 
 
-  bool DeleteEntry<typename KeyType, typename ValueType>( KeyType key){
-    
+  template<typename KeyType>
+  bool BWTree::DeleteEntry( KeyType key){
+    std::stack<PidType > path = search(BWTree::root, key);
+    if(path.empty()) {
+      LOG_ERROR("InsertEntry get empty tree");
+    }
+    PidType basic_pid = path.top();
+    path.pop();
+
+    Node* basic_node = mapping_table.get( basic_pid );
+    RecordDelta* new_delta = new RecordDelta(basic_pid, RecordDelta::DELETE, key);
+
+
   };
+
+  template<typename KeyType>
+  bool BWTree::is_in( KeyType key, Node** nptr) {
+
+  };
+
+
 
 
 }  // End index namespace

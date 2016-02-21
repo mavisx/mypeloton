@@ -29,6 +29,9 @@
 #define MAPPING_TABLE_SIZE_BITNUM 10
 #define MAPPING_TABLE_SIZE  (1<<(MAPPING_TABLE_SIZE_BITNUM))
 
+#define GET_TIER1_INDEX(pid) ((pid) >> 10)
+#define GET_TIER2_INDEX(pid) ((pid) & 0x3ff)
+
 namespace peloton {
 namespace index {
 
@@ -37,9 +40,17 @@ typedef long long PidType;
 
 class MappingTable{
  private:
-  PidType * mappingtable_1[MAPPING_TABLE_SIZE];
+  void** mappingtable_1[MAPPING_TABLE_SIZE];
+  static std::atomic<unsigned long> nextPid;
 
+ public:
+  MappingTable();
+  void* get(PidType pid);
+  bool set(PidType pid, void * addr);
+  bool add(void * addr);
+  bool remove(PidType pid);
 };
+
 
 // Look up the stx btree interface for background.
 // peloton/third_party/stx/btree.h
@@ -97,8 +108,6 @@ private:
 
   // We need a root node
   PidType  root;
-
-  static std::atomic<unsigned long> nextPid;
 
   MappingTable mapping_table;
 

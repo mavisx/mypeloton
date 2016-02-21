@@ -19,7 +19,7 @@ namespace index {
 
 // Add your function definitions here
     template<typename KeyType>
-    PidType BwTree::Search(PidType pid, KeyType key) {
+    PidType BWTree::Search(PidType pid, KeyType key) {
         auto itr = mapping_table.find( pid );
         if(itr == mapping_table.end())
             return -1;
@@ -29,7 +29,7 @@ namespace index {
     }
 
   template<typename KeyType>
-  PidType BwTree::Search(Node* node, KeyType key) {
+  PidType BWTree::Search(Node* node, KeyType key) {
       //should always kep track of right key range even in delta node
       if(key < node->low_key || key >= node->high_key) {
           LOG_ERROR("Search Range Err: key not in range")

@@ -20,7 +20,7 @@ namespace index {
 
     // Add your function definitions here
     template <typename KeyType, typename ValueType, class KeyComparator>
-    bool BwTree::InsertEntry(KeyType key, ValueType value) {
+    bool BWTree::InsertEntry(KeyType key, ValueType value) {
 
         PidType basic_node_pid = Search(BwTree::root, key);
         auto itr = mapping_table.find( basic_node_pid );

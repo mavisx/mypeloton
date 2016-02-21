@@ -227,13 +227,10 @@ class BWTree {
   // Delta Node for record update operation
   struct RecordDelta : public Node {
     // construction added -mavis
-    RecordDelta(PidType next, RecordType op, KeyType k, ValueType v)
-        : Node(NodeType::RECORD_DELTA) {
-      this->op_type = op;
-      this->key = k;
-      this->value = v;
-      prepend(this, next);
-    }
+
+    RecordDelta(PidType next, RecordType op, KeyType k);
+
+    RecordDelta(PidType next, RecordType op, KeyType k, peloton::ValueType v);
 
     enum RecordType { INSERT = 0, DELETE = 1, UPDATE = 2 };
 
@@ -265,11 +262,14 @@ class BWTree {
   struct MergeDelta : public Node {
     MergeDelta(Node *next) : Node(NodeType::MERGE_DELTA), Kp(Kp), pQ(pQ) {}
     KeyType Kp;
-    PidType pQ;
+    Node* orignal_node;
   };
 
   struct DeleteIndexDelta : public Node {
-    DeleteIndexDelta(Node *next) : Node(NodeType::DELETE_INDEX_TERM_DELTA) {}
+    DeleteIndexDelta(Node *next, KeyType Kp, KeyType Kq, PidType pQ)
+    : Node(NodeType::INDEX_ENTRY_DELTA), Kp(Kp), Kq(Kq), pQ(pQ) {}
+    KeyType Kp, Kq;
+    PidType pQ;
   };
 
  public:
@@ -279,25 +279,14 @@ class BWTree {
   // destructor
   ~BWTree(){};
 
-  /*
-   ************************************************
-   * private functions, invisible to users -leiqi *
-   ************************************************
-   */
-
-  KeyComparator m_key_less;
 
   /*
    ************************************************
    *    public method exposed to users -leiqi     *
    ************************************************
    */
-
+ public:
   std::stack<PidType> search<typename KeyType>(PidType rootpid, KeyType key);
-  PidType search<typename KeyType>(Node *node, KeyType key,
-                                   std::stack<PidType> &path);
-
-  bool is_in<typename KeyType>( KeyType key, Node** nptr);
 
   // True if a < b ? "constructed" from m_key_less()
   inline bool operator<(const KeyType &a, const KeyType b) const {
@@ -325,6 +314,23 @@ class BWTree {
   }
 
   /*
+    ************************************************
+    * private functions, invisible to users -leiqi *
+    ************************************************
+    */
+
+ private:
+
+  KeyComparator m_key_less;
+
+  PidType search<typename KeyType>(Node *node, KeyType key,
+                                   std::stack<PidType> &path);
+
+  bool is_in<typename KeyType>( KeyType key, Node* listhead);
+
+  bool apend_delete(KeyType key, Node* node);
+
+  /*
    ************************************************
    *               end -leiqi                     *
    ************************************************
@@ -332,17 +338,17 @@ class BWTree {
 
 
   //public method exposed to users -mavis
-  bool insert_entry<typename KeyType, typename ValueType>( KeyType key, ValueType value );
-  bool delete_entry<typename KeyType, typename ValueType>( KeyType key);
-  bool update_entry<typename KeyType, typename ValueType>( KeyType key, ValueType value );
-  PidType create_leaf<typename KeyType, typename ValueType>( Node* new_leaf, KeyType* pivotal );
-  SplitDelta* create_split_delta<typename KeyType, typename ValueType>( PidType new_leaf, KeyType p, Node* next );
+  bool insert_entry<typename KeyType, typename ValueType>( KeyType key,
+                                                           ValueType value );
+  bool delete_entry<typename KeyType>( KeyType key);
+  bool update_entry<typename KeyType, typename ValueType>( KeyType key,
+                                                           ValueType value );
+  bool create_leaf<typename KeyType, typename ValueType>( Node* orig_leaf );
   //interfaces of SCAN to be added -mavis
 
-  // interfaces of SCAN to be added -mavis
 
   // private fuctions, invisible to users -mavis
-  static bool prepend(Node *delta_node, PidType orig_pid);
+  inline bool prepend(Node *delta_node, Node* orig_node);
   // end -mavis
 };
 

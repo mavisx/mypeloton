@@ -159,33 +159,19 @@ namespace index {
 
 
     template <typename KeyType, typename ValueType, class KeyComparator>
-    static bool BWTree::prepend( Node* delta_node, PidType orig_pid) {
-
-        // Get node* of original node form mapping_table
-        Node* orig_node = mapping_table.get(orig_pid);
+    inline bool BWTree::prepend( Node* delta_node, Node* orig_node) {
 
         // update the delta_list_len of the delta node
         delta_node->delta_list_len = orig_node->delta_list_len + 1;
 
         // update the slotuse of the new delta node
-        if( delta_node->node_type == RECORD_DELTA ){
-            switch ( ((struct RecordDelta*)delta_node)->op_type ){
-                case RecordDelta::INSERT :
-                    delta_node->slotuse = orig_node->slotuse + 1;
-                    break;
-                case RecordDelta::DELETE :
-                    delta_node->slotuse = orig_node->slotuse - 1;
-                    break;
-                case RecordDelta::UPDATE :
-                    delta_node->slotuse = orig_node->slotuse;
-                    break;
-            }
-        }
+        delta_node->slotuse = orig_node->slotuse;
 
         // maintain next, prev pointer
         delta_node -> next = orig_node;
-        if( mapping_table.set(orig_pid, delta_node))
 
+        delta_node -> low_key = orig_node->low_key;
+        delta_node -> high_key = orig_node->high_key;
 
         return true;
     }

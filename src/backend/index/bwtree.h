@@ -367,9 +367,10 @@ public:
    */
 
   //public method exposed to users -mavis
-  bool InsertEntry<typename KeyType, typename ValueType>( KeyType key, ValueType value );
-  bool DeleteEntry<typename KeyType, typename ValueType>( KeyType key);
-  bool UpdateEntry<typename KeyType, typename ValueType>( KeyType key, ValueType value );
+  bool insert_entry<typename KeyType, typename ValueType>( KeyType key, ValueType value );
+  bool delete_entry<typename KeyType, typename ValueType>( KeyType key);
+  bool update_entry<typename KeyType, typename ValueType>( KeyType key, ValueType value );
+  bool create_leaf<typename KeyType, typename ValueType>( Node* orig_leaf );
   //interfaces of SCAN to be added -mavis
 
   //private fuctions, invisible to users -mavis

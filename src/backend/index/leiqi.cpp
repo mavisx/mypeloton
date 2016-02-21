@@ -21,12 +21,19 @@ namespace index {
 // Add your function definitions here
   template<typename KeyType>
   std::stack<PidType> BWTree::search(PidType pid, KeyType key) {
-    auto itr = mapping_table.find( pid );
-    if(itr == mapping_table.end())
+    auto node = mapping_table.get( pid );
+    if(node == NULL)
       return -1;
+    std::stack<PidType> path;
+    path.push(pid);
+    PidType res = search(node, key, path);
+    if(res==-1) {
+      std::stack<PidType> ep;
+      return ep;
+    }
 
-  BWTree::Node* node = itr->second;
-    return search(node, key);
+    return path;
+
   }
 
   template<typename KeyType>
@@ -43,25 +50,75 @@ namespace index {
 
       case INDEX_ENTRY_DELTA:
       case DELETE_INDEX_TERM_DELTA:
-        return search(node->next, key);
+        if(key >= ((IndexEntryDelta*)node)->Kp
+            && key < ((IndexEntryDelta*)node)->Kq) {
+          PidType pid= ((MergeDelta *)node)->pQ;
+          node = mapping_table.get(pid);
+          if(node == NULL) {
+            LOG_ERROR("pid in split/merge delta not exist");
+            return -1;
+          }
+          path.push(pid);
+          return search(node, key, path);
+        }
+
+        return search(node->next, key, path);
 
       case REMOVE_NODE_DELTA:
         LOG_INFO("Search Range Info: meet a removed node");
-        return -1;
 
+        path.pop();
+        if(path.empty()){
+          LOG_INFO("Search Path empty");
+          return -1;
+        }
+        PidType pid = path.top();
+
+        node = mapping_table.get(pid);
+        if(node == NULL) {
+          LOG_ERROR("Pid in split/merge delta not exist");
+          return -1;
+        }
+        else {
+          return search(node, key, path);
+        }
       case MERGE_DELTA:
       case SPLIT_DELTA:
         LOG_INFO("Search Range Info: meet split/merge delta");
-        if(key >= ((MergeDelta)node)->Kp) {
-          node = mapping_table.get(((MergeDelta)node).pQ);
+        PidType pid= ((MergeDelta *)node)->pQ;
+        if(key >= ((MergeDelta *)node)->Kp) {
+          node = mapping_table.get(pid);
           if(node == NULL) {
-            LOG_ERROR("pid in split/merge delta in not exist");
+            LOG_ERROR("pid in split/merge delta not exist");
             return -1;
           }
-          return search()
+          path.push(pid);
+          return search(node, key, path);
+        }
+        return search(node->next, key, path);
+
+      case INNER:
+        if(node->slotuse == 0) {
+          LOG_ERROR("empty inner node");
+          return -1;
+        } else {
+          int i = 0;
+          for(i = 0; i < node->slotuse; i++) {
+            if(key >= ((InnerNode*)node)->slotkey[i]) continue;
+            else break;
+          }
+          PidType pid= ((InnerNode *)node)->childid[i];
+          node = mapping_table.get(pid);
+          if(node == NULL) {
+            LOG_ERROR("pid in inner node not exist");
+            return -1;
+          }
+          path.push(pid);
+          return search(node, key, path);
         }
       default:
-        break;
+        return -1;
+
     }
 
 

@@ -46,7 +46,7 @@ class MappingTable{
 template <typename KeyType, typename ValueType, class KeyComparator, typename KeyEqualityChecker>
 class BWTree {
 
- public:
+public:
   // *** Constructed Types
 
   /// Typedef of our own type
@@ -55,7 +55,7 @@ class BWTree {
   /// Size type used to count keys
   typedef size_t                              SizeType;
 
-  /// The pair of key_type and data_type, this may be different from value_type.
+  /// The pair of KeyType and data_type, this may be different from value_type.
   typedef std::pair<KeyType, ValueType>      PairType;
 
  public:
@@ -79,7 +79,10 @@ class BWTree {
   static const unsigned short mininnerslots = (innerslotmax / 2);
 
 
- private:
+
+private:
+  struct Node;
+  typedef long long PidType;
   enum NodeType
   {
     LEAF = 0,
@@ -100,7 +103,7 @@ class BWTree {
   MappingTable mapping_table;
 
 
- private:
+private:
 /**
    * The Node inheritance hierachy
    * **/
@@ -287,13 +290,62 @@ class BWTree {
                                         next, next->delta_list_len+1) {}
   };
 
- public:
+public:
 
   // constructor
   BWTree() {};
 
-  //private functions, invisible to users -leiqi
+  /*
+   ************************************************
+   * private functions, invisible to users -leiqi *
+   ************************************************
+   */
+
+  KeyComparator m_key_less;
+
+  /*
+   ************************************************
+   *    public method exposed to users -leiqi     *
+   ************************************************
+   */
+
   PidType Search<typename KeyType>(PidType rootpid, KeyType key);
+
+  // True if a < b ? "constructed" from m_key_less()
+  inline bool operator<(const KeyType &a, const KeyType b) const
+  {
+    return m_key_less(a, b);
+  }
+
+  // True if a <= b ? constructed from key_less()
+  inline bool operator<=(const KeyType &a, const KeyType b) const
+  {
+    return !m_key_less(b, a);
+  }
+
+  // True if a > b ? constructed from key_less()
+  inline bool operator>(const KeyType &a, const KeyType &b) const
+  {
+    return m_key_less(b, a);
+  }
+
+  // True if a >= b ? constructed from key_less()
+  inline bool operator>=(const KeyType &a, const KeyType b) const
+  {
+    return !m_key_less(a, b);
+  }
+
+  // True if a == b ? constructed from key_less().
+  inline bool operator==(const KeyType &a, const KeyType &b) const
+  {
+    return !m_key_less(a, b) && !m_key_less(b, a);
+  }
+
+  /*
+   ************************************************
+   *               end -leiqi                     *
+   ************************************************
+   */
 
   //public method exposed to users -mavis
   bool InsertEntry<typename KeyType, typename ValueType>( KeyType key, ValueType value );

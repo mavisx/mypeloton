@@ -28,8 +28,8 @@ namespace index {
     path.push(pid);
     PidType res = search(node, key, path);
     if(res==-1) {
-      std::stack<PidType> ep;
-      return ep;
+      std::stack<PidType> empty_res;
+      return empty_res;
     }
 
     return path;
@@ -121,11 +121,12 @@ namespace index {
         return -1;
 
     }
-
-
-
   }
 
+
+  bool DeleteEntry<typename KeyType, typename ValueType>( KeyType key){
+    
+  };
 
 
 }  // End index namespace

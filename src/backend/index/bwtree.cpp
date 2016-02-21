@@ -17,7 +17,7 @@ namespace index {
 
   MappingTable::MappingTable() {
     for (int i = 0; i < MAPPING_TABLE_SIZE; i++) {
-      mappingtable_1[i] = NULL;
+      mappingtable_1[i] = nullptr;
     }
     nextPid = 0;
   }
@@ -26,8 +26,8 @@ namespace index {
     long tier1_idx = GET_TIER1_INDEX(pid);
     long tier2_idx = GET_TIER2_INDEX(pid);
 
-    if (mappingtable_1[tier1_idx] == NULL)
-      return NULL;
+    if (mappingtable_1[tier1_idx] == nullptr)
+      return nullptr;
 
     return mappingtable_1[tier1_idx][tier2_idx];
   }
@@ -36,24 +36,50 @@ namespace index {
     long tier1_idx = GET_TIER1_INDEX(pid);
     long tier2_idx = GET_TIER2_INDEX(pid);
 
-    if (mappingtable_1[tier1_idx] == NULL) {
+    if (mappingtable_1[tier1_idx] == nullptr) {
      return false;
     }
 
     void* expected = mappingtable_1[tier1_idx][tier2_idx];
-    return true
+
+    // using cas to set the value in mapping table
+    return std::atomic_compare_exchange_strong (
+        (std::atomic<void*>*)&mappingtable_1[tier1_idx][tier2_idx],
+        &expected, addr);
   }
 
 
   bool MappingTable::add(void * addr) {
     unsigned long new_pid = nextPid++;
+    long tier1_idx = GET_TIER1_INDEX(new_pid);
+    long tier2_idx = GET_TIER2_INDEX(new_pid);
+
+    void *expectded = (void*)mappingtable_1[tier1_idx];
+
+    // atomically add new secondary index
+    if (mappingtable_1[tier1_idx] == nullptr) {
+      void* desired = new void*[MAPPING_TABLE_SIZE];
+      if (! std::atomic_compare_exchange_strong (
+          (std::atomic<void*>*)&mappingtable_1[tier1_idx],
+          &expectded, desired) ) {
+        delete[] desired;
+      }
+    }
+
+    expectded = (void*)mappingtable_1[tier1_idx][tier2_idx];
+    // atomically add addr to desired secondary index
+    return std::atomic_compare_exchange_strong (
+        (std::atomic<void*>*)&mappingtable_1[tier1_idx][tier2_idx],
+        &expectded, addr
+    );
 
   }
 
-  bool MappingTable::remove(PidType pid) {
+  void MappingTable::remove(PidType pid) {
     long tier1_idx = GET_TIER1_INDEX(pid);
     long tier2_idx = GET_TIER2_INDEX(pid);
 
+    mappingtable_1[tier1_idx][tier2_idx] = nullptr;
   }
 
 

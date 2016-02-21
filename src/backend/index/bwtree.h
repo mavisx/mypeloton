@@ -49,7 +49,7 @@ class MappingTable{
   BWTree::Node* get(PidType pid);
   bool set(PidType pid, void * addr);
   bool add(void * addr);
-  bool remove(PidType pid);
+  void remove(PidType pid);
 };
 
 
@@ -167,7 +167,7 @@ private:
     PidType        childid[innerslotmax+1 + 1];
 
     /// Set variables to initial values
-    InnerNode():Node(NodeType:: INNER, NULL, 0) {}
+    InnerNode():Node(NodeType:: INNER, nullptr, 0) {}
 
     /// True if the node's slots are full
     inline bool isfull() const
@@ -211,9 +211,7 @@ private:
     ValueType       slotdata[leafslotmax + 1];
 
 
-    LeafNode():Node(NodeType:: LEAF, NULL, 0) {
-      prevleaf = nextleaf = NULL;
-    }
+    LeafNode():Node(NodeType:: LEAF, nullptr, 0), prevleaf(nullptr), nextleaf(nullptr) {}
 
     /// True if the node's slots are full
     inline bool isfull() const
@@ -255,7 +253,9 @@ private:
   struct RecordDelta : public Node {
 
     //construction added -mavis
-    RecordDelta(Node *next):Node(NodeType:: RECORD_DELTA, next, next->delta_list_len+1) {}
+    RecordDelta(Node *next, RecordType op, KeyType k, ValueType v)
+        : Node(NodeType:: RECORD_DELTA, next, next->delta_list_len+1), op_type(op),
+    key(k), value(v){}
 
     enum RecordType
     {
@@ -323,8 +323,8 @@ public:
    ************************************************
    */
 
-  std::stack<PidType> search<typename KeyType>(PidType rootpid, KeyType key);
-  std::stack<PidType> search<typename KeyType>search(Node* node, KeyType key);
+//  std::stack<PidType> search<typename KeyType>(PidType rootpid, KeyType key);
+//  std::stack<PidType> search<typename KeyType>search(Node* node, KeyType key);
 
   // True if a < b ? "constructed" from m_key_less()
   inline bool operator<(const KeyType &a, const KeyType b) const

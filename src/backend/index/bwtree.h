@@ -14,6 +14,7 @@
 
 #include <stddef.h>
 #include <assert.h>
+#include <atomic>
 #include <unordered_map>
 #include <stack>
 #include "../common/types.h"
@@ -78,7 +79,7 @@ public:
 
   /// Base B+ tree parameter: The number of key slots in each inner node,
   /// this can differ from slots in each leaf.
-  static const unsigned short  innerslotmax = BWTREE_MAX( 8, BWTREE_NODE_SIZE / (sizeof(KeyType) + sizeof(void*)) );
+  static const unsigned short  innerslotmax = BWTREE_MAX( 8, BWTREE_NODE_SIZE / (sizeof(KeyType) + sizeof(PidType)) );
 
   /// Computed B+ tree parameter: The minimum number of key/data slots used
   /// in a leaf. If fewer slots are used, the leaf will be merged or slots
@@ -108,7 +109,7 @@ private:
   // We need a root node
   PidType  root;
 
-  MappingTable mapping_table;
+  static MappingTable mapping_table;
 
  public:
   /**
@@ -119,6 +120,9 @@ private:
     /// Number of key slotuse use, so number of valid children or data
     /// pointers
     unsigned short  slotuse;
+
+    // flag to indicate whether this chain belongs to a leaf node
+    bool is_leaf;
 
     // Delta chain next pointer
     Node *next;
@@ -136,11 +140,11 @@ private:
     KeyType low_key, high_key;
 
     // constructor
-    Node (NodeType n, Node * delta_next, size_t delta_len) {
+    Node (NodeType n) {
       node_type = n;
       slotuse = 0;
-      next = delta_next;
-      delta_list_len = delta_len;
+      next = nullptr;
+      delta_list_len = -1;
     }
 
     // True if this is a leaf node
@@ -167,7 +171,7 @@ private:
     PidType        childid[innerslotmax+1 + 1];
 
     /// Set variables to initial values
-    InnerNode():Node(NodeType:: INNER, nullptr, 0) {}
+    InnerNode():Node(NodeType:: INNER) {}
 
     /// True if the node's slots are full
     inline bool isfull() const
@@ -204,14 +208,14 @@ private:
 
     /// Keys of children or data pointers
     //  we plus one so as to avoid overflow when consolidation
-    LeafNode        slotkey[leafslotmax + 1];
+    KeyType        slotkey[leafslotmax + 1];
 
     /// Array of data
     //  we plus one so as to avoid overflow when consolidation
     ValueType       slotdata[leafslotmax + 1];
 
 
-    LeafNode():Node(NodeType:: LEAF, nullptr, 0), prevleaf(nullptr), nextleaf(nullptr) {}
+    LeafNode():Node(NodeType:: LEAF), prevleaf(nullptr), nextleaf(nullptr) {}
 
     /// True if the node's slots are full
     inline bool isfull() const
@@ -253,9 +257,9 @@ private:
   struct RecordDelta : public Node {
 
     //construction added -mavis
-    RecordDelta(Node *next, RecordType op, KeyType k, ValueType v)
-        : Node(NodeType:: RECORD_DELTA, next, next->delta_list_len+1), op_type(op),
-    key(k), value(v){}
+    RecordDelta(PidType next, RecordType op, KeyType k, ValueType v)
+        : Node(NodeType:: RECORD_DELTA) {
+        this->op_type = op; this->key = k; this->value = v; prepend(this, next);}
 
     enum RecordType
     {
@@ -273,7 +277,7 @@ private:
   struct SplitDelta : public Node {
 
     SplitDelta(Node *next, KeyType Kp, PidType pQ)
-        : Node(NodeType::SPLIT_DELTA, next, next->delta_list_len+1),
+        : Node(NodeType::SPLIT_DELTA),
           Kp(Kp), pQ(pQ) {}
     KeyType Kp;
     PidType pQ;
@@ -281,7 +285,7 @@ private:
 
   struct IndexEntryDelta : public Node {
     IndexEntryDelta(Node *next, KeyType Kp, KeyType Kq, PidType pQ)
-        : Node(NodeType::INDEX_ENTRY_DELTA, next, next->delta_list_len+1),
+        : Node(NodeType::INDEX_ENTRY_DELTA),
           Kp(Kp), Kq(Kq), pQ(pQ) {}
     KeyType Kp, Kq;
     PidType pQ;
@@ -289,19 +293,18 @@ private:
 
   // Delta Node for merging operation
   struct RemoveDelta : public Node {
-    RemoveDelta(Node *next) : Node(NodeType::REMOVE_NODE_DELTA, next, next->delta_list_len+1) {}
+    RemoveDelta(Node *next) : Node(NodeType::REMOVE_NODE_DELTA) {}
   };
 
   struct MergeDelta : public Node {
-    MergeDelta(Node *next) : Node(NodeType::MERGE_DELTA, next, next->delta_list_len+1),
+    MergeDelta(Node *next) : Node(NodeType::MERGE_DELTA),
                              Kp(Kp), pQ(pQ) {}
     KeyType Kp;
     PidType pQ;
   };
 
   struct DeleteIndexDelta : public Node {
-    DeleteIndexDelta(Node *next) : Node(NodeType::DELETE_INDEX_TERM_DELTA,
-                                        next, next->delta_list_len+1) {}
+    DeleteIndexDelta(Node *next) : Node(NodeType::DELETE_INDEX_TERM_DELTA) {}
   };
 
 public:
@@ -370,7 +373,7 @@ public:
   //interfaces of SCAN to be added -mavis
 
   //private fuctions, invisible to users -mavis
-  bool Prepend(Node* delta_node, PidType orig_pid);
+  static bool prepend(Node* delta_node, PidType orig_pid);
   //end -mavis
 
 };

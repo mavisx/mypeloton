@@ -31,7 +31,8 @@ namespace index {
  *
  * @see Index
  */
-template <typename KeyType, typename ValueType, class KeyComparator, class KeyEqualityChecker>
+template <typename KeyType, typename ValueType, class KeyComparator,
+          class KeyEqualityChecker>
 class BTreeIndex : public Index {
   friend class IndexFactory;
 
@@ -50,7 +51,7 @@ class BTreeIndex : public Index {
   std::vector<ItemPointer> Scan(const std::vector<Value> &values,
                                 const std::vector<oid_t> &key_column_ids,
                                 const std::vector<ExpressionType> &expr_types,
-                                const ScanDirectionType& scan_direction);
+                                const ScanDirectionType &scan_direction);
 
   std::vector<ItemPointer> ScanAllKeys();
 
@@ -58,13 +59,9 @@ class BTreeIndex : public Index {
 
   std::string GetTypeName() const;
 
-  bool Cleanup() {
-    return true;
-  }
+  bool Cleanup() { return true; }
 
-  size_t GetMemoryFootprint() {
-    return container.GetMemoryFootprint();
-  }
+  size_t GetMemoryFootprint() { return container.GetMemoryFootprint(); }
 
  protected:
   MapType container;

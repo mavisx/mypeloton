@@ -18,15 +18,28 @@
 #include "../common/types.h"
 #include "../storage/tuple.h"
 
+// in bytes
 #define BWTREE_NODE_SIZE  64
 
 #define BWTREE_MAX(a,b)       ((a) < (b) ? (b) : (a))
 
 #define MAX_DELTA_CHAIN_LEN   8
 
+// in bits
+#define MAPPING_TABLE_SIZE_BITNUM 10
+#define MAPPING_TABLE_SIZE  (1<<(MAPPING_TABLE_SIZE_BITNUM))
 
 namespace peloton {
 namespace index {
+
+
+typedef long long PidType;
+
+class MappingTable{
+ private:
+  PidType * mappingtable_1[MAPPING_TABLE_SIZE];
+
+};
 
 // Look up the stx btree interface for background.
 // peloton/third_party/stx/btree.h
@@ -44,8 +57,6 @@ class BWTree {
 
   /// The pair of key_type and data_type, this may be different from value_type.
   typedef std::pair<KeyType, ValueType>      PairType;
-
-  typedef long long PidType;
 
  public:
 
@@ -86,7 +97,7 @@ class BWTree {
 
   static std::atomic<unsigned long> nextPid;
 
-  std::unordered_map<PidType, Node*> mapping_table;
+  MappingTable mapping_table;
 
 
  private:
@@ -279,9 +290,7 @@ class BWTree {
  public:
 
   // constructor
-  BWTree() {
-
-  }
+  BWTree() {};
 
   //private functions, invisible to users -leiqi
   PidType Search<typename KeyType>(PidType rootpid, KeyType key);

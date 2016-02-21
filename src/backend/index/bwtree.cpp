@@ -15,8 +15,9 @@
 namespace peloton {
 namespace index {
 
-// Add your function definitions here
+  BWTree::BWTree() {
 
+  }
 
 
 }  // End index namespace

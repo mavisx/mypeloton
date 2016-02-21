@@ -13,7 +13,7 @@
 
 
 #include "bwtree.h"
-#include <atomic>
+
 
 namespace peloton {
 namespace index {
@@ -22,38 +22,71 @@ namespace index {
     template <typename KeyType, typename ValueType, class KeyComparator>
     bool BWTree::InsertEntry(KeyType key, ValueType value) {
 
-        PidType basic_node_pid = Search(BwTree::root, key);
-        auto itr = mapping_table.find( basic_node_pid );
-        if( itr == mapping_table.end() )
-            return false;
-        Node* basic_node = itr->second;
-        RecordDelta* new_delta = new RecordDelta();
-        new_delta->op_type = RecordDelta::INSERT;
-        new_delta->value = value;
+        std::stack<PidType > path = search(BWTree::root, key);
+        PidType basic_pid = path.top();
+        path.pop();
+
+        Node* basic_node = mapping_table.get( basic_pid );
+        RecordDelta* new_delta = new RecordDelta(basic_pid, RecordDelta::INSERT, key, value);
+
         new_delta->high_key = basic_node->high_key;
         new_delta->low_key = basic_node->low_key;
-        if( Prepend(new_delta, basic_node_pid) )
-            return false;
 
-        Node* tmp_cur_node = new_delta;
-        while( tmp_cur_node -> slotuse > innerslotmax){
+
+        if( ((LeafNode*)new_delta)->isfull() ) {
+
+            std::stack<Node *> delta_chain;
+            Node* tmp_cur_node = new_delta;
+            while (tmp_cur_node) {
+                delta_chain.push(tmp_cur_node);
+                tmp_cur_node = tmp_cur_node -> next;
+            }
+
+            KeyType tmpkeys[leafslotmax+1];
+            ValueType tmpvals[leafslotmax+1];
+            LeafNode* orig_leaf_node = (LeafNode*)delta_chain.top();
+            delta_chain.pop();
+            for(int i=0; i< leafslotmax; i++){
+                tmpkeys[i] = orig_leaf_node->slotkey[i];
+                tmpvals[i] = orig_leaf_node->slotdata[i];
+            }
+            while( !delta_chain.empty() ){
+                Node* cur_delta = delta_chain.top();
+                delta_chain.pop();
+                switch (cur_delta -> node_type ){
+                    case RECORD_DELTA:
+                        if( ((RecordDelta*)cur_delta) ->op_type == RecordDelta::INSERT){
+
+                            for(int x=leafslotmax; x>=0; x--){
+                                if( ((RecordDelta*)cur_delta)->key > )
+                                tmpkeys[x+1] = tmpkeys[x];
+                            }
+
+                        } else if ( ((RecordDelta*)cur_delta) ->op_type == RecordDelta::DELETE ){
+
+                        } else if ( ((RecordDelta*)cur_delta) ->op_type == RecordDelta::UPDATE ){
+
+                        }
+                        break;
+                    case SPLIT_DELTA:
+                        break;
+                    case MERGE_DELTA:
+                        break;
+                    case REMOVE_NODE_DELTA:
+                        break;
+                }
+            }
+            LeafNode *new_leaf = new LeafNode();
 
 
         }
-
-
-
-
     }
 
     template <typename KeyType, typename ValueType, class KeyComparator>
-    bool BwTree::Prepend( Node* delta_node, PidType orig_pid) {
+    static bool BWTree::prepend( Node* delta_node, PidType orig_pid) {
 
         // Get node* of original node form mapping_table
-        auto itr = mapping_table.find( orig_pid );
-        if( itr == mapping_table.end() )
-            return false;
-        Node* orig_node = itr->second;
+        Node* orig_node = mapping_table.get(orig_pid);
 
         // update the delta_list_len of the delta node
         delta_node->delta_list_len = orig_node->delta_list_len + 1;
@@ -75,11 +108,7 @@ namespace index {
 
         // maintain next, prev pointer
         delta_node -> next = orig_node;
-        orig_node -> prev = delta_node;
-
-        // CAS operation
-        while(std::atomic_compare_exchange_weak<Node*>
-                ( &(itr->second), itr->second, delta_node));
+        mapping_table.set(orig_pid, delta_node);
 
 
         return true;

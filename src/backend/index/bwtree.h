@@ -34,7 +34,7 @@ template <typename KeyType, typename ValueType, class KeyComparator, typename Ke
 class BwTree {
 
 
- public:
+public:
   // *** Constructed Types
 
   /// Typedef of our own type
@@ -47,7 +47,7 @@ class BwTree {
   typedef std::pair<KeyType, ValueType>      PairType;
 
 
- public:
+public:
   // *** Static Constant Options and Values of the Bw Tree
   /// Base B2 tree parameter: The number of key/data slots in each leaf
   static const unsigned short  leafslotmax = BWTREE_MAX( 8, BWTREE_NODE_SIZE / (sizeof(KeyType) + sizeof(ValueType)) );
@@ -69,9 +69,11 @@ class BwTree {
   // We need a root node
   PidType  root;
 
- private:
+private:
   struct Node;
-typedef long long PidType;
+  typedef long long PidType;
+
+
 
   enum NodeType
   {
@@ -269,8 +271,57 @@ typedef long long PidType;
 
   };
 
-  //private functions, invisible to users -leiqi
+  /*
+   ************************************************
+   * private functions, invisible to users -leiqi *
+   ************************************************
+   */
+
+  key_compare m_key_less;
+
+  /*
+   ************************************************
+   *    public method exposed to users -leiqi     *
+   ************************************************
+   */
+
   PidType Search<typename KeyType>(PidType rootpid, KeyType key);
+
+  // True if a < b ? "constructed" from m_key_less()
+  inline bool operator<(const key_type &a, const key_type b) const
+  {
+    return m_key_less(a, b);
+  }
+
+  // True if a <= b ? constructed from key_less()
+  inline bool operator<=(const key_type &a, const key_type b) const
+  {
+    return !m_key_less(b, a);
+  }
+
+  // True if a > b ? constructed from key_less()
+  inline bool operator>(const key_type &a, const key_type &b) const
+  {
+    return m_key_less(b, a);
+  }
+
+  // True if a >= b ? constructed from key_less()
+  inline bool operator>=(const key_type &a, const key_type b) const
+  {
+    return !m_key_less(a, b);
+  }
+
+  // True if a == b ? constructed from key_less().
+  inline bool operator==(const key_type &a, const key_type &b) const
+  {
+    return !m_key_less(a, b) && !m_key_less(b, a);
+  }
+
+  /*
+   ************************************************
+   *               end -leiqi                     *
+   ************************************************
+   */
 
   //public method exposed to users -mavis
   bool InsertEntry<typename KeyType, typename ValueType>( KeyType key, ValueType value );

@@ -31,14 +31,13 @@ namespace index {
 // Look up the stx btree interface for background.
 // peloton/third_party/stx/btree.h
 template <typename KeyType, typename ValueType, class KeyComparator, typename KeyEqualityChecker>
-class BwTree {
-
+class BWTree {
 
  public:
   // *** Constructed Types
 
   /// Typedef of our own type
-  typedef BwTree<KeyType, ValueType, KeyComparator, KeyEqualityChecker> BwTreeSelf;
+  typedef BWTree<KeyType, ValueType, KeyComparator, KeyEqualityChecker> BwTreeSelf;
 
   /// Size type used to count keys
   typedef size_t                              SizeType;
@@ -46,8 +45,10 @@ class BwTree {
   /// The pair of key_type and data_type, this may be different from value_type.
   typedef std::pair<KeyType, ValueType>      PairType;
 
+  typedef long long PidType;
 
  public:
+
   // *** Static Constant Options and Values of the Bw Tree
   /// Base B2 tree parameter: The number of key/data slots in each leaf
   static const unsigned short  leafslotmax = BWTREE_MAX( 8, BWTREE_NODE_SIZE / (sizeof(KeyType) + sizeof(ValueType)) );
@@ -66,28 +67,30 @@ class BwTree {
   /// merged or slots shifted from it's siblings.
   static const unsigned short mininnerslots = (innerslotmax / 2);
 
+
+ private:
+  enum NodeType
+  {
+    LEAF = 0,
+    INNER = 1,
+    RECORD_DELTA = 2,
+    INDEX_ENTRY_DELTA = 3,
+    REMOVE_NODE_DELTA = 4,
+    MERGE_DELTA = 5,
+    DELETE_INDEX_TERM_DELTA = 6,
+    SPLIT_DELTA = 7
+  };
+
   // We need a root node
   PidType  root;
 
- private:
-  struct Node;
-typedef long long PidType;
-
-  enum NodeType
-  {
-      LEAF = 0,
-      INNER = 1,
-      RECORD_DELTA = 2,
-      INDEX_ENTRY_DELTA = 3,
-      REMOVE_NODE_DELTA = 4,
-      MERGE_DELTA = 5,
-      DELETE_INDEX_TERM_DELTA = 6
-  };
+  static std::atomic<unsigned long> nextPid;
 
   std::unordered_map<PidType, Node*> mapping_table;
 
 
-  /**
+ private:
+/**
    * The Node inheritance hierachy
    * **/
   struct Node
@@ -108,16 +111,16 @@ typedef long long PidType;
     // minimal and maximal key in this node
     KeyType low_key, high_key;
 
-    /// Delayed initialisation of constructed node
-    inline void initialize(NodeType n)
-    {
+    // constructor
+    Node (NodeType n, Node * delta_next, size_t delta_len) {
       node_type = n;
       slotuse = 0;
+      next = delta_next;
+      delta_list_len = delta_len;
     }
 
-    /// True if this is a leaf node
-    inline bool isleafnode() const
-    {
+    // True if this is a leaf node
+    inline bool isleafnode() const {
       return (node_type == NodeType:: LEAF);
     }
   };
@@ -138,10 +141,7 @@ typedef long long PidType;
     PidType        childid[innerslotmax+1 + 1];
 
     /// Set variables to initial values
-    inline void initialize()
-    {
-      Node::initialize(NodeType:: INNER);
-    }
+    InnerNode():Node(NodeType:: INNER, NULL, 0) {}
 
     /// True if the node's slots are full
     inline bool isfull() const
@@ -184,10 +184,8 @@ typedef long long PidType;
     //  we plus one so as to avoid overflow when consolidation
     ValueType       slotdata[leafslotmax + 1];
 
-    /// Set variables to initial values
-    inline void initialize()
-    {
-      Node::initialize(NodeType::LEAF);
+
+    LeafNode():Node(NodeType:: LEAF, NULL, 0) {
       prevleaf = nextleaf = NULL;
     }
 
@@ -231,7 +229,7 @@ typedef long long PidType;
   struct RecordDelta : public Node {
 
     //construction added -mavis
-    RecordDelta(){ this->node_type = RECORD_DELTA; }
+    RecordDelta(Node *next):Node(NodeType:: RECORD_DELTA, next, next->delta_list_len+1) {}
 
     enum RecordType
     {
@@ -247,27 +245,43 @@ typedef long long PidType;
 
   // Delta Node for spliting operation
   struct SplitDelta : public Node {
+
+    SplitDelta(Node *next, KeyType Kp, PidType pQ)
+        : Node(NodeType::SPLIT_DELTA, next, next->delta_list_len+1), Kp(Kp), pQ(pQ) {}
+
     KeyType Kp;
     PidType pQ;
   };
 
   struct IndexEntryDelta : public Node {
+    IndexEntryDelta(Node *next, KeyType Kp, KeyType Kq, PidType pQ)
+        : Node(NodeType::INDEX_ENTRY_DELTA, next, next->delta_list_len+1),
+          Kp(Kp), Kq(Kq), pQ(pQ) {}
+
     KeyType Kp, Kq;
     PidType pQ;
   };
 
   // Delta Node for merging operation
   struct RemoveDelta : public Node {
-
+    RemoveDelta(Node *next) : Node(NodeType::REMOVE_NODE_DELTA, next, next->delta_list_len+1) {}
   };
 
   struct MergeDelta : public Node {
-
+    MergeDelta(Node *next) : Node(NodeType::MERGE_DELTA, next, next->delta_list_len+1) {}
   };
 
   struct DeleteIndexDelta : public Node {
-
+    DeleteIndexDelta(Node *next) : Node(NodeType::DELETE_INDEX_TERM_DELTA,
+                                        next, next->delta_list_len+1) {}
   };
+
+ public:
+
+  // constructor
+  BWTree() {
+
+  }
 
   //private functions, invisible to users -leiqi
   PidType Search<typename KeyType>(PidType rootpid, KeyType key);

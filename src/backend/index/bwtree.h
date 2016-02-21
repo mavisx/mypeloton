@@ -40,12 +40,12 @@ typedef long long PidType;
 
 class MappingTable{
  private:
-  void** mappingtable_1[MAPPING_TABLE_SIZE];
+  BWTree::Node** mappingtable_1[MAPPING_TABLE_SIZE];
   static std::atomic<unsigned long> nextPid;
 
  public:
   MappingTable();
-  void* get(PidType pid);
+  BWTree::Node* get(PidType pid);
   bool set(PidType pid, void * addr);
   bool add(void * addr);
   bool remove(PidType pid);
@@ -92,8 +92,6 @@ public:
 
 
 private:
-  struct Node;
-  typedef long long PidType;
   enum NodeType
   {
     LEAF = 0,
@@ -111,9 +109,8 @@ private:
 
   MappingTable mapping_table;
 
-
-private:
-/**
+ public:
+  /**
    * The Node inheritance hierachy
    * **/
   struct Node
@@ -147,6 +144,8 @@ private:
       return (node_type == NodeType:: LEAF);
     }
   };
+
+private:
 
   /// Extended structure of a inner node in-memory. Contains only keys and no
   /// data items.

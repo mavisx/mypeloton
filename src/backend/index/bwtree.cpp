@@ -22,7 +22,7 @@ namespace index {
     nextPid = 0;
   }
 
-  void* MappingTable::get(PidType pid) {
+  BWTree::Node* MappingTable::get(PidType pid) {
     long tier1_idx = GET_TIER1_INDEX(pid);
     long tier2_idx = GET_TIER2_INDEX(pid);
 
@@ -41,7 +41,7 @@ namespace index {
     }
 
     void* expected = mappingtable_1[tier1_idx][tier2_idx];
-    return true;
+    return true
   }
 
 

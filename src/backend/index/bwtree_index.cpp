@@ -25,6 +25,7 @@ BWTreeIndex<KeyType, ValueType, KeyComparator, KeyEqualityChecker>::BWTreeIndex(
       equals(metadata),
       comparator(metadata) {
   // Add your implementation here
+
 }
 
 template <typename KeyType, typename ValueType, class KeyComparator, class KeyEqualityChecker>

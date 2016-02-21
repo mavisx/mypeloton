@@ -24,6 +24,7 @@ namespace index {
     auto node = mapping_table.get( pid );
     if(node == nullptr)
       return -1;
+
     std::stack<PidType> path;
     path.push(pid);
     PidType res = search(node, key, path);

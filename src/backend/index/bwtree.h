@@ -323,8 +323,9 @@ public:
    ************************************************
    */
 
-//  std::stack<PidType> search<typename KeyType>(PidType rootpid, KeyType key);
-//  std::stack<PidType> search<typename KeyType>search(Node* node, KeyType key);
+
+  std::stack<PidType> search<typename KeyType>(PidType rootpid, KeyType key);
+  PidType search<typename KeyType>(Node* node, KeyType key, std::stack<PidType>& path);
 
   // True if a < b ? "constructed" from m_key_less()
   inline bool operator<(const KeyType &a, const KeyType b) const

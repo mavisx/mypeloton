@@ -245,7 +245,7 @@ class BWTree {
   // Delta Node for spliting operation
   struct SplitDelta : public Node {
     SplitDelta(Node *next, KeyType Kp, PidType pQ)
-        : Node(NodeType::SPLIT_DELTA), Kp(Kp), pQ(pQ) {}
+        : Node(NodeType::SPLIT_DELTA), Kp(Kp), pQ(pQ) { }
     KeyType Kp;
     PidType pQ;
   };
@@ -335,7 +335,8 @@ class BWTree {
   bool insert_entry<typename KeyType, typename ValueType>( KeyType key, ValueType value );
   bool delete_entry<typename KeyType, typename ValueType>( KeyType key);
   bool update_entry<typename KeyType, typename ValueType>( KeyType key, ValueType value );
-  bool create_leaf<typename KeyType, typename ValueType>( Node* orig_leaf );
+  PidType create_leaf<typename KeyType, typename ValueType>( Node* new_leaf, KeyType* pivotal );
+  SplitDelta* create_split_delta<typename KeyType, typename ValueType>( PidType new_leaf, KeyType p, Node* next );
   //interfaces of SCAN to be added -mavis
 
   // interfaces of SCAN to be added -mavis

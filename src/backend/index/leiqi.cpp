@@ -22,7 +22,7 @@ namespace index {
   template<typename KeyType>
   std::stack<PidType> BWTree::search(PidType pid, KeyType key) {
     auto node = mapping_table.get( pid );
-    if(node == NULL)
+    if(node == nullptr)
       return -1;
     std::stack<PidType> path;
     path.push(pid);
@@ -39,7 +39,7 @@ namespace index {
   template<typename KeyType>
   PidType BWTree::search(Node* node, KeyType key, std::stack<PidType>& path) {
     //should always kep track of right key range even in delta node
-    PidType pid
+    PidType pid;
     if(key < node->low_key || key >= node->high_key) {
       LOG_ERROR("Search Range Err: key not in range");
       return -1;
@@ -55,7 +55,7 @@ namespace index {
             && key < ((IndexEntryDelta*)node)->Kq) {
           pid= ((MergeDelta *)node)->pQ;
           node = mapping_table.get(pid);
-          if(node == NULL) {
+          if(node == nullptr) {
             LOG_ERROR("pid in split/merge delta not exist");
             return -1;
           }
@@ -76,7 +76,7 @@ namespace index {
         pid = path.top();
 
         node = mapping_table.get(pid);
-        if(node == NULL) {
+        if(node == nullptr) {
           LOG_ERROR("Pid in split/merge delta not exist");
           return -1;
         }
@@ -89,7 +89,7 @@ namespace index {
         pid= ((MergeDelta *)node)->pQ;
         if(key >= ((MergeDelta *)node)->Kp) {
           node = mapping_table.get(pid);
-          if(node == NULL) {
+          if(node == nullptr) {
             LOG_ERROR("pid in split/merge delta not exist");
             return -1;
           }
@@ -110,7 +110,7 @@ namespace index {
           }
           pid= ((InnerNode *)node)->childid[i];
           node = mapping_table.get(pid);
-          if(node == NULL) {
+          if(node == nullptr) {
             LOG_ERROR("pid in inner node not exist");
             return -1;
           }

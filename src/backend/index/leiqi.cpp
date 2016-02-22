@@ -165,8 +165,6 @@ namespace index {
   template<typename KeyType>
   bool BWTree::apend_delete(KeyType key, Node* basic_pid){
     RecordDelta* new_delta = new RecordDelta(basic_pid, RecordDelta::INSERT, key);
-    new_delta->high_key = basic_node->high_key;
-    new_delta->low_key = basic_node->low_key;
   }
 
   template<typename KeyType>
@@ -195,9 +193,15 @@ namespace index {
         }
         return false;
       case MERGE_DELTA:
-      case SPLIT_DELTA:
         if(key >= ((MergeDelta *)node)->Kp) {
-          PidType pid= ((MergeDelta *)node)->pQ;
+          node= ((MergeDelta *)node)->orignal_node;
+          return is_in(key,node);
+        }
+        return is_in(key, node->next);
+
+      case SPLIT_DELTA:
+        if(key >= ((SplitDelta *)node)->Kp) {
+          PidType pid= ((SplitDelta *)node)->pQ;
           return is_in(key,mapping_table.get(pid));
         }
         return is_in(key, node->next);

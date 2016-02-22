@@ -260,7 +260,8 @@ class BWTree {
   };
 
   struct MergeDelta : public Node {
-    MergeDelta(Node *next) : Node(NodeType::MERGE_DELTA), Kp(Kp), pQ(pQ) {}
+    MergeDelta(Node *next,KeyType Kp, Node* orignal_node)
+        : Node(NodeType::MERGE_DELTA), Kp(Kp), orignal_node(orignal_node) {}
     KeyType Kp;
     Node* orignal_node;
   };

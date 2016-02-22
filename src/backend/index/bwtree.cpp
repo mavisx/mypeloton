@@ -69,6 +69,9 @@ long MappingTable::add(void* addr) {
   // atomically add new secondary index
   if (mappingtable_1[tier1_idx] == nullptr) {
     void* desired = new void* [MAPPING_TABLE_SIZE];
+    for (int i = 0; i < MAPPING_TABLE_SIZE; i++ ) {
+      desired[i] = nullptr;
+    }
     if (!std::atomic_compare_exchange_strong(
             (std::atomic<void*>*)&mappingtable_1[tier1_idx], &expectded,
             desired)) {

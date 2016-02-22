@@ -22,15 +22,15 @@ namespace index {
   template<typename KeyType>
   std::stack<PidType> BWTree::search(PidType pid, KeyType key) {
     auto node = mapping_table.get( pid );
-    if(node == nullptr)
-    {
+    if(node == nullptr) {
       std::stack<PidType> empty_res;
       return empty_res;
     }
+
     std::stack<PidType> path;
     path.push(pid);
     PidType res = search(node, key, path);
-    if(res==-1) {
+    if(res == -1) {
       std::stack<PidType> empty_res;
       return empty_res;
     }
@@ -41,7 +41,7 @@ namespace index {
 
   template<typename KeyType>
   PidType BWTree::search(Node* node, KeyType key, std::stack<PidType>& path) {
-    //should always kep track of right key range even in delta node
+    //should always keep track of right key range even in delta node
     PidType pid;
 //    if(key < node->low_key || key >= node->high_key) {
 //      LOG_ERROR("Search Range Err: key not in range");
@@ -56,7 +56,7 @@ namespace index {
       case DELETE_INDEX_TERM_DELTA:
         if(key >= ((IndexEntryDelta*)node)->Kp
             && key < ((IndexEntryDelta*)node)->Kq) {
-          pid= ((IndexEntryDelta *)node)->pQ;
+          pid = ((IndexEntryDelta *)node)->pQ;
           node = mapping_table.get(pid);
           if(node == nullptr) {
             LOG_ERROR("pid in split/merge delta not exist");
@@ -88,25 +88,28 @@ namespace index {
         }
       case MERGE_DELTA:
         LOG_INFO("Search Range Info: meet merge delta");
-        pid= ((MergeDelta *)node)->pQ;
+
         if(key >= ((MergeDelta *)node)->Kp) {
-          node = mapping_table.get(pid);
+          node = ((MergeDelta *)node)->orignal_node;
           if(node == nullptr) {
             LOG_ERROR("pid in split delta not exist");
             return -1;
           }
+
           return search(node, key, path);
         }
         return search(node->next, key, path);
       case SPLIT_DELTA:
         LOG_INFO("Search Range Info: meet split/merge delta");
-        pid= ((MergeDelta *)node)->pQ;
-        if(key >= ((MergeDelta *)node)->Kp) {
+        pid = ((SplitDelta*)node)->pQ;
+        if(key >= ((SplitDelta *)node)->Kp) {
           node = mapping_table.get(pid);
           if(node == nullptr) {
             LOG_ERROR("pid in split/merge delta not exist");
             return -1;
           }
+          // replace the top with our split node
+          path.pop();
           path.push(pid);
           return search(node, key, path);
         }
@@ -162,8 +165,6 @@ namespace index {
   template<typename KeyType>
   bool BWTree::apend_delete(KeyType key, Node* basic_pid){
     RecordDelta* new_delta = new RecordDelta(basic_pid, RecordDelta::INSERT, key);
-    new_delta->high_key = basic_node->high_key;
-    new_delta->low_key = basic_node->low_key;
   }
 
   template<typename KeyType>
@@ -192,9 +193,15 @@ namespace index {
         }
         return false;
       case MERGE_DELTA:
-      case SPLIT_DELTA:
         if(key >= ((MergeDelta *)node)->Kp) {
-          PidType pid= ((MergeDelta *)node)->pQ;
+          node= ((MergeDelta *)node)->orignal_node;
+          return is_in(key,node);
+        }
+        return is_in(key, node->next);
+
+      case SPLIT_DELTA:
+        if(key >= ((SplitDelta *)node)->Kp) {
+          PidType pid= ((SplitDelta *)node)->pQ;
           return is_in(key,mapping_table.get(pid));
         }
         return is_in(key, node->next);

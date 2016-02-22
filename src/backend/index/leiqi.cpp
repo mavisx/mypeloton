@@ -95,18 +95,21 @@ namespace index {
             LOG_ERROR("pid in split delta not exist");
             return -1;
           }
+
           return search(node, key, path);
         }
         return search(node->next, key, path);
       case SPLIT_DELTA:
         LOG_INFO("Search Range Info: meet split/merge delta");
-        pid= ((SplitDelta*)node)->pQ;
+        pid = ((SplitDelta*)node)->pQ;
         if(key >= ((SplitDelta *)node)->Kp) {
           node = mapping_table.get(pid);
           if(node == nullptr) {
             LOG_ERROR("pid in split/merge delta not exist");
             return -1;
           }
+          // replace the top with our split node
+          path.pop();
           path.push(pid);
           return search(node, key, path);
         }

@@ -88,9 +88,9 @@ namespace index {
         }
       case MERGE_DELTA:
         LOG_INFO("Search Range Info: meet merge delta");
-        pid = ((MergeDelta *)node)->pQ;
+
         if(key >= ((MergeDelta *)node)->Kp) {
-          node = mapping_table.get(pid);
+          node = ((MergeDelta *)node)->orignal_node;
           if(node == nullptr) {
             LOG_ERROR("pid in split delta not exist");
             return -1;
@@ -100,8 +100,8 @@ namespace index {
         return search(node->next, key, path);
       case SPLIT_DELTA:
         LOG_INFO("Search Range Info: meet split/merge delta");
-        pid= ((MergeDelta *)node)->pQ;
-        if(key >= ((MergeDelta *)node)->Kp) {
+        pid= ((SplitDelta*)node)->pQ;
+        if(key >= ((SplitDelta *)node)->Kp) {
           node = mapping_table.get(pid);
           if(node == nullptr) {
             LOG_ERROR("pid in split/merge delta not exist");

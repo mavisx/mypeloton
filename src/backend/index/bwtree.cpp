@@ -100,7 +100,7 @@ void MappingTable::remove(PidType pid) {
 BWTree::BWTree() {
   LeafNode* addr = new LeafNode();
   long newpid = mapping_table.add(addr);
-  if (newpid > 0) {
+  if (newpid >= 0) {
     root = newpid;
   } else {
     LOG_ERROR("Can't create the first leafNode");

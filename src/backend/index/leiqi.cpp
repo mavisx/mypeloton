@@ -56,7 +56,7 @@ namespace index {
       case DELETE_INDEX_TERM_DELTA:
         if(key >= ((IndexEntryDelta*)node)->Kp
             && key < ((IndexEntryDelta*)node)->Kq) {
-          pid= ((MergeDelta *)node)->pQ;
+          pid= ((IndexEntryDelta *)node)->pQ;
           node = mapping_table.get(pid);
           if(node == nullptr) {
             LOG_ERROR("pid in split/merge delta not exist");
@@ -139,7 +139,7 @@ namespace index {
 
 
   template<typename KeyType>
-  bool BWTree::DeleteEntry( KeyType key){
+  bool BWTree::delete_entry( KeyType key){
     std::stack<PidType > path = search(BWTree::root, key);
     if(path.empty()) {
       LOG_ERROR("InsertEntry get empty tree");
@@ -160,8 +160,10 @@ namespace index {
   };
 
   template<typename KeyType>
-  bool BWTree::apend_delete(KeyType key, Node* node){
-
+  bool BWTree::apend_delete(KeyType key, Node* basic_pid){
+    RecordDelta* new_delta = new RecordDelta(basic_pid, RecordDelta::INSERT, key);
+    new_delta->high_key = basic_node->high_key;
+    new_delta->low_key = basic_node->low_key;
   }
 
   template<typename KeyType>
@@ -204,6 +206,32 @@ namespace index {
 
 
 
+  template<typename KeyType>
+  BWTree::RecordDelta::RecordDelta(PidType next, BWTree::RecordDelta::RecordType op, KeyType k)
+      : Node(NodeType::RECORD_DELTA){
+    op_type = op;
+    key = k;
+    // Get node* of original node form mapping_table
+    Node* orig_node = mapping_table.get(next);
+    prepend(this, orig_node);
+
+    // update the slotuse of the new delta node
+    if(op_type == INSERT) {
+      slotuse = (unsigned short) (orig_node->slotuse + 1);
+    }
+    else if(op_type == DELETE) {
+      slotuse = (unsigned short) (orig_node->slotuse - 1);
+    }
+
+  }
+
+
+  template<typename KeyType>
+  BWTree::RecordDelta::RecordDelta(PidType next, BWTree::RecordDelta::RecordType op, KeyType k, ValueType v)
+      : Node(NodeType::RECORD_DELTA){
+    RecordDelta(next, op,k);
+    this->value = v;
+  }
 
 }  // End index namespace
 }  // End peloton namespace

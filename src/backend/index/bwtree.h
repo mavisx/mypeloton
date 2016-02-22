@@ -145,7 +145,25 @@ class BWTree {
     }
 
     // True if this is a leaf node
-    inline bool isleafnode() const { return (node_type == NodeType::LEAF); }
+    inline bool is_leaf_node() const { return (node_type == NodeType::LEAF); }
+
+    inline bool need_split() const {
+      if (is_leaf) {
+        return slotuse > leafslotmax;
+      }
+      else {
+        return slotuse > innerslotmax;
+      }
+    }
+
+    inline bool need_merge() const {
+      if (is_leaf) {
+        return slotuse < minleafslots;
+      }
+      else {
+        return slotuse < mininnerslots;
+      }
+    }
   };
 
  private:
@@ -164,7 +182,7 @@ class BWTree {
     PidType childid[innerslotmax + 1 + 1];
 
     /// Set variables to initial values
-    InnerNode() : Node(NodeType::INNER) {}
+    InnerNode() : Node(NodeType::INNER), delta_list_len(0){}
 
     /// True if the node's slots are full
     inline bool isfull() const { return (Node::slotuse == innerslotmax); }
@@ -197,7 +215,8 @@ class BWTree {
     //  we plus one so as to avoid overflow when consolidation
     ValueType slotdata[leafslotmax + 1];
 
-    LeafNode() : Node(NodeType::LEAF), prevleaf(nullptr), nextleaf(nullptr) {}
+    LeafNode() : Node(NodeType::LEAF), prevleaf(nullptr), nextleaf(nullptr),
+                 delta_list_len(0) {}
 
     /// True if the node's slots are full
     inline bool isfull() const { return (Node::slotuse == leafslotmax); }
@@ -297,6 +316,8 @@ class BWTree {
   PidType search<typename KeyType>(Node *node, KeyType key,
                                    std::stack<PidType> &path);
 
+  bool is_in<typename KeyType>( KeyType key, Node** nptr);
+
   // True if a < b ? "constructed" from m_key_less()
   inline bool operator<(const KeyType &a, const KeyType b) const {
     return m_key_less(a, b);
@@ -327,6 +348,7 @@ class BWTree {
    *               end -leiqi                     *
    ************************************************
    */
+
 
   // public method exposed to users -mavis
   bool InsertEntry<typename KeyType, typename ValueType>(KeyType key,

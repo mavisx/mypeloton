@@ -23,6 +23,9 @@ namespace index {
     bool BWTree::InsertEntry(KeyType key, ValueType value) {
 
         std::stack<PidType > path = search(BWTree::root, key);
+        if(path.empty()) {
+            LOG_ERROR("InsertEntry get empty tree");
+        }
         PidType basic_pid = path.top();
         path.pop();
 

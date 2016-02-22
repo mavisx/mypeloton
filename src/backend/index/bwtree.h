@@ -242,7 +242,7 @@ class BWTree {
   // Delta Node for spliting operation
   struct SplitDelta : public Node {
     SplitDelta(Node *next, KeyType Kp, PidType pQ)
-        : Node(NodeType::SPLIT_DELTA), Kp(Kp), pQ(pQ) {}
+        : Node(NodeType::SPLIT_DELTA), Kp(Kp), pQ(pQ) { }
     KeyType Kp;
     PidType pQ;
   };

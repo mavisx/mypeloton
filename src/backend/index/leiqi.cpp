@@ -217,7 +217,7 @@ namespace index {
   BWTree::RecordDelta::RecordDelta(PidType next, BWTree::RecordDelta::RecordType op, KeyType k)
       : Node(NodeType::RECORD_DELTA){
     op_type = op;
-    key = k;
+    key = k;da
     // Get node* of original node form mapping_table
     Node* orig_node = mapping_table.get(next);
     prepend(this, orig_node);

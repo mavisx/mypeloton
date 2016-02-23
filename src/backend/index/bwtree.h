@@ -109,6 +109,11 @@ class BWTree {
 
   static MappingTable mapping_table;
 
+  /// Pointer to first leaf in the double linked leaf chain
+  PidType   headleaf;
+
+  /// Pointer to last leaf in the double linked leaf chain
+  PidType   tailleaf;
  public:
   /**
    * The Node inheritance hierachy
@@ -294,7 +299,7 @@ class BWTree {
 
  public:
   // constructor
-  BWTree(){};
+  BWTree(KeyComparator &kc, KeyEqualityChecker &kec){};
 
   // destructor
   ~BWTree(){};
@@ -330,7 +335,7 @@ class BWTree {
 
   // True if a == b ? constructed from key_less().
   inline bool operator==(const KeyType &a, const KeyType &b) const {
-    return !m_key_less(a, b) && !m_key_less(b, a);
+    return m_key_equal(a, b);
   }
 
   /*
@@ -342,13 +347,14 @@ class BWTree {
  private:
 
   KeyComparator m_key_less;
+  KeyEqualityChecker m_key_equal;
 
   PidType search<typename KeyType>(Node *node, KeyType key,
                                    std::stack<PidType> &path);
 
   bool is_in<typename KeyType>( KeyType key, Node* listhead);
 
-  bool apend_delete(KeyType key, Node* node);
+  bool apend_delete(KeyType key);
 
   /*
    ************************************************
@@ -356,14 +362,14 @@ class BWTree {
    ************************************************
    */
 
-
+ public:
   //public method exposed to users -mavis
   bool insert_entry<typename KeyType, typename ValueType>( KeyType key,
                                                            ValueType value );
   bool delete_entry<typename KeyType>( KeyType key);
   bool update_entry<typename KeyType, typename ValueType>( KeyType key,
                                                            ValueType value );
-  bool create_leaf<typename KeyType, typename ValueType>( Node* orig_leaf );
+  PidType create_leaf<typename KeyType, typename ValueType>(  Node* new_delta, KeyType* pivotal );
   //interfaces of SCAN to be added -mavis
 
 

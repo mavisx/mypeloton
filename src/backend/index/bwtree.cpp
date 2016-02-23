@@ -315,6 +315,7 @@ BWTree::RecordDelta::RecordDelta(PidType next, BWTree::RecordDelta::RecordType o
   key = k;
   // Get node* of original node form mapping_table
   Node* orig_node = mapping_table.get(next);
+
   prepend(this, orig_node);
 
   // update the slotuse of the new delta node
@@ -329,7 +330,8 @@ BWTree::RecordDelta::RecordDelta(PidType next, BWTree::RecordDelta::RecordType o
 
 
 template<typename KeyType>
-BWTree::RecordDelta::RecordDelta(PidType next, BWTree::RecordDelta::RecordType op, KeyType k, ValueType v)
+BWTree::RecordDelta::RecordDelta(PidType next, BWTree::RecordDelta::RecordType op,
+                                 KeyType k, ValueType v)
     : Node(NodeType::RECORD_DELTA){
   RecordDelta(next, op,k);
   this->value = v;
@@ -474,25 +476,6 @@ PidType BWTree::create_leaf<typename KeyType, typename ValueType>( Node* new_del
 
 }
 
-
-
-template <typename KeyType, typename ValueType, class KeyComparator>
-inline bool BWTree::prepend( Node* delta_node, Node* orig_node) {
-
-  // update the delta_list_len of the delta node
-  delta_node->delta_list_len = orig_node->delta_list_len + 1;
-
-  // update the slotuse of the new delta node
-  delta_node->slotuse = orig_node->slotuse;
-
-  // maintain next, prev pointer
-  delta_node -> next = orig_node;
-
-  delta_node -> low_key = orig_node->low_key;
-  delta_node -> high_key = orig_node->high_key;
-
-  return true;
-}
 
 }  // End index namespace
 }  // End peloton namespace

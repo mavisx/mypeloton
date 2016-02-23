@@ -362,6 +362,25 @@ class BWTree {
    ************************************************
    */
 
+  // private fuctions, invisible to users -mavis
+  inline static bool prepend(Node* delta_node, Node* orig_node) {
+
+    // update the delta_list_len of the delta node
+    delta_node->delta_list_len = orig_node->delta_list_len + 1;
+
+    // update the slotuse of the new delta node
+    delta_node->slotuse = orig_node->slotuse;
+
+    // maintain next, prev pointer
+    delta_node -> next = orig_node;
+
+    delta_node -> low_key = orig_node->low_key;
+    delta_node -> high_key = orig_node->high_key;
+
+    return true;
+  }
+  // end -mavis
+
  public:
   //public method exposed to users -mavis
   bool insert_entry<typename KeyType, typename ValueType>( KeyType key,
@@ -372,10 +391,6 @@ class BWTree {
   PidType create_leaf<typename KeyType, typename ValueType>(  Node* new_delta, KeyType* pivotal );
   //interfaces of SCAN to be added -mavis
 
-
-  // private fuctions, invisible to users -mavis
-  inline bool prepend(Node *delta_node, Node* orig_node);
-  // end -mavis
 };
 
 }  // End index namespace

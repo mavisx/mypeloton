@@ -248,8 +248,8 @@ bool BWTree::delete_entry( KeyType key){
   //TODO:apend merge_delta
 
   //TODO:apend delete_index_term_delta
-  
 
+  return false;
 };
 
 template<typename KeyType>
@@ -378,6 +378,10 @@ bool BWTree::insert_entry(KeyType key, ValueType value) {
 
 
   }
+
+
+
+  return false;
 }
 
 
@@ -475,7 +479,7 @@ PidType BWTree::create_leaf<typename KeyType, typename ValueType>( Node* new_del
   }
   new_leaf->high_key = orig_leaf_node->high_key;
   new_leaf->low_key = new_leaf->slotdata[0];
-  new_leaf->slotuse = leafslotmax/2;
+  new_leaf->slotuse = (unsigned short) (leafslotmax / 2);
 
   *pivotal = new_leaf->slotdata[0];
   PidType new_leaf_pid = mapping_table.add(new_leaf);

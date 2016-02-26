@@ -50,23 +50,6 @@ enum NodeType {
   SPLIT_DELTA = 7
 };
 
-template <typename KeyType, typename ValueType, class KeyComparator,
-          typename KeyEqualityChecker>
-class BWTree;
-
-class MappingTable {
- private:
-  void** mappingtable_1[MAPPING_TABLE_SIZE];
-  std::atomic<unsigned long> nextPid;
-
- public:
-  MappingTable();
-  ~MappingTable();
-  void* get(PidType pid);
-  bool set(PidType pid, void* addr);
-  long add(void* addr);
-  void remove(PidType pid);
-};
 
 // Look up the stx btree interface for background.
 // peloton/third_party/stx/btree.h
@@ -106,6 +89,97 @@ class BWTree {
   /// in an inner node. If fewer slots are used, the inner node will be
   /// merged or slots shifted from it's siblings.
   static const unsigned short mininnerslots = (innerslotmax / 2);
+
+  struct Node;
+  struct MappingTable {
+   private:
+    Node** mappingtable_1[MAPPING_TABLE_SIZE];
+    std::atomic<unsigned long> nextPid;
+
+   public:
+    MappingTable() {
+      for (int i = 0; i < MAPPING_TABLE_SIZE; i++) {
+        mappingtable_1[i] = nullptr;
+      }
+      nextPid = 0;
+    }
+
+    ~MappingTable() {
+      for (int i = 0; i < MAPPING_TABLE_SIZE; i++) {
+        if (mappingtable_1[i] != nullptr) {
+          delete[] mappingtable_1[i];
+          mappingtable_1[i] = nullptr;
+        }
+      }
+    }
+
+    Node* get(PidType pid) {
+      long tier1_idx = GET_TIER1_INDEX(pid);
+      long tier2_idx = GET_TIER2_INDEX(pid);
+
+      if (mappingtable_1[tier1_idx] == nullptr) return nullptr;
+
+      return mappingtable_1[tier1_idx][tier2_idx];
+    }
+
+    bool set(PidType pid, Node* addr) {
+      long tier1_idx = GET_TIER1_INDEX(pid);
+      long tier2_idx = GET_TIER2_INDEX(pid);
+
+      if (mappingtable_1[tier1_idx] == nullptr) {
+        return false;
+      }
+
+      Node* expected = mappingtable_1[tier1_idx][tier2_idx];
+
+      // using cas to set the value in mapping table
+      return std::atomic_compare_exchange_strong(
+          (std::atomic<Node*>*)&mappingtable_1[tier1_idx][tier2_idx], &expected,
+          addr);
+    }
+
+
+    // if correctly add this new addr, return the new pid,
+    // else return -1
+    long add(Node* addr) {
+      unsigned long new_pid = nextPid++;
+      long tier1_idx = GET_TIER1_INDEX(new_pid);
+      long tier2_idx = GET_TIER2_INDEX(new_pid);
+
+      Node** expectded = mappingtable_1[tier1_idx];
+
+      // atomically add new secondary index
+      if (mappingtable_1[tier1_idx] == nullptr) {
+        Node** desired = new Node* [MAPPING_TABLE_SIZE];
+        for (int i = 0; i < MAPPING_TABLE_SIZE; i++) {
+          desired[i] = nullptr;
+        }
+        if (!std::atomic_compare_exchange_strong(
+            (std::atomic<Node**>*)&mappingtable_1[tier1_idx], &expectded,
+            desired)) {
+          delete[] desired;
+        }
+      }
+
+      Node* expectded2 = mappingtable_1[tier1_idx][tier2_idx];
+      // atomically add addr to desired secondary index
+      if (std::atomic_compare_exchange_strong(
+          (std::atomic<Node*>*)&mappingtable_1[tier1_idx][tier2_idx],
+          &expectded2, addr)) {
+        return new_pid;
+      } else {
+        return -1;
+      }
+    }
+
+    void remove(PidType pid) {
+      long tier1_idx = GET_TIER1_INDEX(pid);
+      long tier2_idx = GET_TIER2_INDEX(pid);
+
+      mappingtable_1[tier1_idx][tier2_idx] = nullptr;
+    }
+  };
+
 
  private:
   // We need a root node
@@ -222,14 +296,19 @@ class BWTree {
     //  we plus one so as to avoid overflow when consolidation
     KeyType slotkey[leafslotmax + 1];
 
-    /// Array of data
+    /// Array of data, each bucket points to an vector of actual data
     //  we plus one so as to avoid overflow when consolidation
-    ValueType slotdata[leafslotmax + 1];
+    std::vector<ValueType>* slotdata[leafslotmax + 1];
 
     LeafNode(MappingTable& mapping_table)
         : Node(NodeType::LEAF, 0, mapping_table),
           prevleaf(nullptr),
-          nextleaf(nullptr) {}
+          nextleaf(nullptr) {
+      // initialize the value bucket
+      for (int i = 0; i < leafslotmax + 1; i++) {
+        slotdata[i] = nullptr;
+      }
+    }
 
     /// True if the node's slots are full
     inline bool isfull() const { return (Node::slotuse == leafslotmax); }
@@ -245,7 +324,10 @@ class BWTree {
     inline void set_slot(unsigned short slot, const PairType& value) {
       assert(slot < Node::slotuse);
       slotkey[slot] = value.first;
-      slotdata[slot] = value.second;
+      if (slotdata[slot] == nullptr) {
+        slotdata[slot] = new std::vector<ValueType>();
+      }
+      slotdata[slot]->push_back(value.second);
     }
 
     /// Set the key pair in slot. Overloaded function used by
@@ -267,7 +349,7 @@ class BWTree {
       op_type = op;
       key = k;
       // Get node* of original node form mapping_table
-      Node* orig_node = (Node*)mapping_table.get(next);
+      Node* orig_node = mapping_table.get(next);
 
       prepend(this, orig_node);
 
@@ -285,7 +367,7 @@ class BWTree {
       op_type = op;
       key = k;
       // Get node* of original node form mapping_table
-      Node* orig_node = (Node*)mapping_table.get(next);
+      Node* orig_node = mapping_table.get(next);
 
       prepend(this, orig_node);
 
@@ -409,7 +491,7 @@ class BWTree {
   KeyEqualityChecker m_key_equal;
 
   std::stack<PidType> search(PidType pid, KeyType key) {
-    auto node = (Node*)mapping_table.get(pid);
+    auto node = mapping_table.get(pid);
     if (node == nullptr) {
       std::stack<PidType> empty_res;
       return empty_res;
@@ -443,7 +525,7 @@ class BWTree {
         if (key_greaterequal(key, ((IndexEntryDelta*)node)->Kp) &&
             key_less(key, ((IndexEntryDelta*)node)->Kq)) {
           pid = ((IndexEntryDelta*)node)->pQ;
-          node = (Node*)mapping_table.get(pid);
+          node = mapping_table.get(pid);
           if (node == nullptr) {
             LOG_ERROR("pid in split/merge delta not exist");
             return -1;
@@ -464,7 +546,7 @@ class BWTree {
         }
         pid = path.top();
 
-        node = (Node*)mapping_table.get(pid);
+        node = mapping_table.get(pid);
         if (node == nullptr) {
           LOG_ERROR("Pid in split/merge delta not exist");
           return -1;
@@ -488,7 +570,7 @@ class BWTree {
         LOG_INFO("Search Range Info: meet split/merge delta");
         pid = ((SplitDelta*)node)->pQ;
         if (key_greaterequal(key, ((SplitDelta*)node)->Kp)) {
-          node = (Node*)mapping_table.get(pid);
+          node = mapping_table.get(pid);
           if (node == nullptr) {
             LOG_ERROR("pid in split/merge delta not exist");
             return -1;
@@ -513,7 +595,7 @@ class BWTree {
               break;
           }
           pid = ((InnerNode*)node)->childid[i];
-          node = (Node*)mapping_table.get(pid);
+          node = mapping_table.get(pid);
           if (node == nullptr) {
             LOG_ERROR("pid in inner node not exist");
             return -1;
@@ -559,7 +641,7 @@ class BWTree {
       case SPLIT_DELTA:
         if (key_greaterequal(key, ((SplitDelta*)node)->Kp)) {
           PidType pid = ((SplitDelta*)node)->pQ;
-          return is_in(key, (Node*)mapping_table.get(pid));
+          return is_in(key, mapping_table.get(pid));
         }
         return is_in(key, node->next);
       default:
@@ -575,7 +657,7 @@ class BWTree {
     PidType basic_pid = path.top();
     path.pop();
 
-    Node* basic_node = (Node*)mapping_table.get(basic_pid);
+    Node* basic_node = mapping_table.get(basic_pid);
     if (!is_in(key, basic_node)) {
       LOG_INFO("DeleteEntry Not Exist");
       return false;
@@ -610,6 +692,64 @@ class BWTree {
   // end -mavis
 
  public:
+
+
+  void get_value(KeyType key, std::vector<ItemPointer>& result) {
+    std::stack<PidType> path = search(root, key);
+    if (path.empty()) {
+      LOG_INFO("There is no result available in this tree");
+      return;
+    }
+
+    PidType target_node = path.top();
+    Node * next = mapping_table.get(target_node);
+
+    if (!next->is_leaf) {
+      LOG_ERROR("get_value's search result is not a leaf");
+      return;
+    }
+
+    // traverse the delta chain from top down
+    // to construct the correct result
+    while (next) {
+      switch (next->node_type) {
+        case RECORD_DELTA : {
+          RecordDelta *node = static_cast<RecordDelta *>(next);
+          if (key_equal(node->key, key)) {
+            if (node->op_type == RecordDelta::RecordType::UPDATE) {
+              result.clear();
+              result.push_back(node->value);
+            } else if (node->op_type == RecordDelta::RecordType::INSERT) {
+              result.push_back(node->value);
+            } else if (node->op_type == RecordDelta::RecordType::DELETE) {
+              // if we meet a "delete" all later value associated with this key is invalid.
+              return;
+            }
+          }
+          next = node->next;
+        }
+        case LEAF: {
+          LeafNode * leaf = static_cast<LeafNode *>(next);
+          for (int i=0; i < leaf->slotuse; i++) {
+            if (key_equal(leaf->slotkey[i], key)) {
+              result.insert(result.end(), leaf->slotdata[i]->begin(), leaf->slotdata[i]->end());
+            }
+          }
+          next = nullptr;
+        }
+        case SPLIT_DELTA: {
+          SplitDelta * splitDelta = static_cast<SplitDelta *>(next);
+
+        }
+      }
+    }
+
+
+    //switch(recorddelta, merge, split)
+    // "until meet first delet record"
+
+  }
+
   // public method exposed to users -mavis
   bool insert_entry(KeyType key, ValueType value) {
     std::stack<PidType> path = search(BWTree::root, key);
@@ -619,26 +759,26 @@ class BWTree {
     PidType basic_pid = path.top();
     path.pop();
 
-    Node* basic_node = (Node*)mapping_table.get(basic_pid);
+    Node* basic_node = mapping_table.get(basic_pid);
     RecordDelta* new_delta = new RecordDelta(basic_pid, RecordDelta::INSERT,
                                              key, value, mapping_table);
 
     new_delta->high_key = basic_node->high_key;
     new_delta->low_key = basic_node->low_key;
 
-    //    //TODO check if the leaf node need to be split
-    //    if (new_delta->need_split()) {
-    //      KeyType pivotal;
-    //
-    //      // create a slibling leaf node
-    //      PidType new_leaf_pid = create_leaf(new_delta, &pivotal);
-    //
-    //      // ceate and prepend a split node
-    //      SplitDelta* new_split = new SplitDelta(new_delta, pivotal,
-    //      new_leaf_pid);
-    //
-    //      // create index-entry-
-    //    }
+    //TODO check if the leaf node need to be split
+    if (new_delta->need_split()) {
+      KeyType pivotal;
+
+      // create a slibling leaf node
+      PidType new_leaf_pid = create_leaf(new_delta, &pivotal);
+
+      // ceate and prepend a split node
+      SplitDelta* new_split = new SplitDelta(new_delta, pivotal,
+      new_leaf_pid);
+
+      // create index-entry-
+    }
 
     return false;
   }
@@ -668,7 +808,8 @@ class BWTree {
 
     // prepare two array to store what logical k-v pairs we have
     KeyType tmpkeys[leafslotmax + 1];
-    ValueType tmpvals[leafslotmax + 1];
+    std::vector<ValueType>* tmpvals[leafslotmax + 1];
+      //TODO: value changed to vector<ValueType>*, many later stuff to be changed!
 
     // the first node must be the original leaf node itself
     LeafNode* orig_leaf_node = (LeafNode*)delta_chain.top();
@@ -744,10 +885,10 @@ class BWTree {
       new_leaf->slotdata[i - leafslotmax / 2] = tmpvals[i];
     }
     new_leaf->high_key = orig_leaf_node->high_key;
-    new_leaf->low_key = new_leaf->slotdata[0];
+    new_leaf->low_key = new_leaf->slotdata[0]; ???
     new_leaf->slotuse = (unsigned short)(leafslotmax / 2);
 
-    *pivotal = new_leaf->slotdata[0];
+    *pivotal = new_leaf->slotdata[0]; ???
     PidType new_leaf_pid = mapping_table.add(new_leaf);
     return new_leaf_pid;
     // TODO: updated the leaf chain

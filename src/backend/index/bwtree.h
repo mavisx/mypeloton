@@ -223,12 +223,20 @@ class BWTree {
     // minimal and maximal key in this node
     KeyType low_key, high_key;
 
-    // constructor
-    Node(NodeType n, size_t delta_l, MappingTable& mt) : mapping_table(mt) {
+    // Double linked list pointers to traverse the leaves
+    Node* prev_node;
+
+    // Double linked list pointers to traverse the leaves
+    Node* next_node;
+
+      // constructor
+    Node(NodeType n, size_t delta_l, MappingTable& mt, Node* prev, Node* next) : mapping_table(mt) {
       node_type = n;
       slotuse = 0;
       next = nullptr;
       delta_list_len = delta_l;
+      prev_node = prev;
+      next_node = next;
     }
 
     // True if this is a leaf node
@@ -267,8 +275,8 @@ class BWTree {
     PidType childid[innerslotmax + 1 + 1];
 
     /// Set variables to initial values
-    InnerNode(MappingTable& mapping_table)
-        : Node(NodeType::INNER, 0, mapping_table) {}
+    InnerNode(MappingTable& mapping_table, Node* prev, Node* next)
+        : Node(NodeType::INNER, 0, mapping_table, prev, next) {}
 
     /// True if the node's slots are full
     inline bool isfull() const { return (Node::slotuse == innerslotmax); }
@@ -287,11 +295,6 @@ class BWTree {
     /// Define an related allocator for the leaf_node structs.
     //    typedef typename _Alloc::template rebind<LeafNode>::other alloc_type;
 
-    /// Double linked list pointers to traverse the leaves
-    LeafNode* prevleaf;
-
-    /// Double linked list pointers to traverse the leaves
-    LeafNode* nextleaf;
 
     /// Keys of children or data pointers
     //  we plus one so as to avoid overflow when consolidation
@@ -301,10 +304,8 @@ class BWTree {
     //  we plus one so as to avoid overflow when consolidation
     std::vector<ValueType>* slotdata[leafslotmax + 1];
 
-    LeafNode(MappingTable& mapping_table)
-        : Node(NodeType::LEAF, 0, mapping_table),
-          prevleaf(nullptr),
-          nextleaf(nullptr) {
+    LeafNode(MappingTable& mapping_table,  Node* prev, Node* next)
+        : Node(NodeType::LEAF, 0, mapping_table, prev, next){
       // initialize the value bucket
       for (int i = 0; i < leafslotmax + 1; i++) {
         slotdata[i] = nullptr;
@@ -345,8 +346,8 @@ class BWTree {
     enum RecordType { INSERT = 0, DELETE = 1, UPDATE = 2 };
 
     RecordDelta(PidType next, RecordType op, KeyType k,
-                MappingTable& mapping_table)
-        : Node(NodeType::RECORD_DELTA, 0, mapping_table) {
+                MappingTable& mapping_table,   Node* prev, Node* next_node)
+        : Node(NodeType::RECORD_DELTA, 0, mapping_table, prev, next_node) {
       op_type = op;
       key = k;
       // Get node* of original node form mapping_table
@@ -363,8 +364,8 @@ class BWTree {
     }
 
     RecordDelta(PidType next, RecordType op, KeyType k, ValueType v,
-                MappingTable& mapping_table)
-        : Node(NodeType::RECORD_DELTA, 0, mapping_table) {
+                MappingTable& mapping_table,  Node* prev, Node* next_node)
+        : Node(NodeType::RECORD_DELTA, 0, mapping_table,  prev, next_node) {
       op_type = op;
       key = k;
       // Get node* of original node form mapping_table
@@ -388,16 +389,16 @@ class BWTree {
 
   // Delta Node for spliting operation
   struct SplitDelta : public Node {
-    SplitDelta(Node* next, KeyType Kp, PidType pQ, MappingTable& mapping_table)
-        : Node(NodeType::SPLIT_DELTA, 0, mapping_table), Kp(Kp), pQ(pQ) {}
+    SplitDelta(Node* next, KeyType Kp, PidType pQ, MappingTable& mapping_table,  Node* prev, Node* next_node)
+        : Node(NodeType::SPLIT_DELTA, 0, mapping_table,prev,next_node), Kp(Kp), pQ(pQ) {}
     KeyType Kp;
     PidType pQ;
   };
 
   struct IndexEntryDelta : public Node {
     IndexEntryDelta(Node* next, KeyType Kp, KeyType Kq, PidType pQ,
-                    MappingTable& mapping_table)
-        : Node(NodeType::INDEX_ENTRY_DELTA, 0, mapping_table),
+                    MappingTable& mapping_table,  Node* prev, Node* next_node)
+        : Node(NodeType::INDEX_ENTRY_DELTA, 0, mapping_table, prev, next_node),
           Kp(Kp),
           Kq(Kq),
           pQ(pQ) {}
@@ -407,14 +408,14 @@ class BWTree {
 
   // Delta Node for merging operation
   struct RemoveDelta : public Node {
-    RemoveDelta(Node* next, MappingTable& mapping_table)
-        : Node(NodeType::REMOVE_NODE_DELTA, 0, mapping_table) {}
+    RemoveDelta(Node* next, MappingTable& mapping_table,  Node* prev, Node* next_node)
+        : Node(NodeType::REMOVE_NODE_DELTA, 0, mapping_table, prev, next_node) {}
   };
 
   struct MergeDelta : public Node {
     MergeDelta(Node* next, KeyType Kp, Node* orignal_node,
-               MappingTable& mapping_table)
-        : Node(NodeType::MERGE_DELTA, 0, mapping_table),
+               MappingTable& mapping_table,  Node* prev, Node* next_node)
+        : Node(NodeType::MERGE_DELTA, 0, mapping_table, prev, next_node),
           Kp(Kp),
           orignal_node(orignal_node) {}
     KeyType Kp;
@@ -423,8 +424,8 @@ class BWTree {
 
   struct DeleteIndexDelta : public Node {
     DeleteIndexDelta(Node* next, KeyType Kp, KeyType Kq, PidType pQ,
-                     MappingTable& mapping_table)
-        : Node(NodeType::INDEX_ENTRY_DELTA, 0, mapping_table),
+                     MappingTable& mapping_table,  Node* prev, Node* next_node)
+        : Node(NodeType::INDEX_ENTRY_DELTA, 0, mapping_table, prev, next_node),
           Kp(Kp),
           Kq(Kq),
           pQ(pQ) {}
@@ -436,7 +437,7 @@ class BWTree {
   // constructor
   BWTree(const KeyComparator& kc, const KeyEqualityChecker& ke)
       : m_key_less(kc), m_key_equal(ke) {
-    LeafNode* addr = new LeafNode(mapping_table);
+    LeafNode* addr = new LeafNode(mapping_table, nullptr, nullptr);
     long newpid = mapping_table.add(addr);
     if (newpid >= 0) {
       // initialize the root, head and tail pid.
@@ -665,7 +666,7 @@ class BWTree {
     }
 
     RecordDelta* new_delta =
-        new RecordDelta(basic_pid, RecordDelta::DELETE, key, mapping_table);
+        new RecordDelta(basic_pid, RecordDelta::DELETE, key, mapping_table, basic_node->prev_node, basic_node->next_node);
     return mapping_table.set(basic_node->pid, new_delta);
   }
   /*
@@ -783,7 +784,7 @@ class BWTree {
 
     Node* basic_node = mapping_table.get(basic_pid);
     RecordDelta* new_delta = new RecordDelta(basic_pid, RecordDelta::INSERT,
-                                             key, value, mapping_table);
+                                             key, value, mapping_table, basic_node->prev_node, basic_node->next_node);
 
     new_delta->high_key = basic_node->high_key;
     new_delta->low_key = basic_node->low_key;
@@ -797,8 +798,9 @@ class BWTree {
 
       // ceate and prepend a split node
       SplitDelta* new_split = new SplitDelta(new_delta, pivotal,
-      new_leaf_pid);
+      new_leaf_pid, mapping_table, new_delta->prev_node, mapping_table.get(new_leaf_pid));
 
+      mapping_table.set(basic_pid, new_split);
 
     }
 
@@ -918,7 +920,7 @@ class BWTree {
 
   PidType create_leaf(Node* new_delta, KeyType* pivotal) {
 
-    LeafNode* new_leaf = new LeafNode(mapping_table);
+    LeafNode* new_leaf = new LeafNode(mapping_table, new_delta, new_delta->next_node);
     new_leaf->delta_list_len = 0;
     new_leaf->high_key = new_delta->high_key;
 
@@ -933,6 +935,7 @@ class BWTree {
 
     *pivotal = new_leaf->slotkey[0];
     PidType new_leaf_pid = mapping_table.add(new_leaf);
+
 
     // TODO: left right pointer
     return new_leaf_pid;

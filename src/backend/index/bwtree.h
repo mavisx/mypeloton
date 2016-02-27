@@ -639,25 +639,11 @@ class BWTree {
     return count_pair(key, value, node->next, count);
   };
 
-  bool append_delete(KeyType key, ValueType value) {
-    int count = 0;
-    std::stack<PidType> path = search(BWTree::root, key);
-    if (path.empty()) {
-      LOG_ERROR("InsertEntry get empty tree");
-      return false;
-    }
-    PidType basic_pid = path.top();
-    path.pop();
-
-    Node* basic_node = mapping_table.get(basic_pid);
-    if (!count_pair(key,value, basic_node,count)) {
-      LOG_INFO("DeleteEntry Not Exist");
-      return false;
-    }
-
+  bool append_delete( Node* basic_node, KeyType key, ValueType value, int count) {
     RecordDelta* new_delta =
-        new RecordDelta(basic_pid, RecordDelta::DELETE, key, value, mapping_table,
-                        basic_node->prev_node, basic_node->next_node);
+        new RecordDelta(basic_node->pid, RecordDelta::DELETE, key, value,
+                        mapping_table, basic_node->prev_node,
+                        basic_node->next_node);
     new_delta->slotuse -= count;
 
     return mapping_table.set(basic_node->pid, new_delta);
@@ -815,15 +801,37 @@ class BWTree {
   }
 
   bool delete_entry(KeyType key, ValueType value) {
-    while (!append_delete(key, value)) {
-      LOG_INFO("delete_entry fail, retry...");
+    bool redo =true;
+
+    //check and insert delete delta
+    while(redo) {
+      int count = 0;
+      std::stack<PidType> path = search(BWTree::root, key);
+
+      if (path.empty()) {
+        LOG_ERROR("InsertEntry get empty tree");
+        return false;
+      }
+
+      PidType basic_pid = path.top();
+      path.pop();
+
+      Node* basic_node = mapping_table.get(basic_pid);
+      if (!count_pair(key,value, basic_node,count)) {
+        LOG_INFO("DeleteEntry Not Exist");
+        return false;
+      }
+
+      redo = append_delete(basic_node, key, value, count);
     }
+
+
 
     // TODO:apend merge_delta
 
     // TODO:apend delete_index_term_delta
 
-    return false;
+    return !redo;
   };
 
   bool update_entry(KeyType key, ValueType value);

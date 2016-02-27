@@ -99,7 +99,6 @@ BWTreeIndex<KeyType, ValueType, KeyComparator, KeyEqualityChecker>::ScanKey(
   KeyType index_key;
   index_key.SetFromKey(key);
 
-  // find the <key, location> pair
   container.get_value(index_key, result);
 
   return result;

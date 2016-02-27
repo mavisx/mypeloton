@@ -203,11 +203,11 @@ public:
     {
     }
 
-    /// Fast swapping of two identical B+ tree objects.
-    void swap(self& from)
-    {
-        std::swap(tree, from.tree);
-    }
+  /// Fast swapping of two identical B+ tree objects.
+  void swap(self& from)
+  {
+      std::swap(tree, from.tree);
+  }
 
 public:
     // *** Key and Value Comparison Function Objects

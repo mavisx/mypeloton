@@ -667,6 +667,8 @@ class BWTree {
         new RecordDelta(basic_pid, RecordDelta::DELETE, key, mapping_table);
     return mapping_table.set(basic_node->pid, new_delta);
   }
+
+  bool apend_merge()
   /*
    ************************************************
    *               end -leiqi                     *
@@ -783,7 +785,7 @@ class BWTree {
     return false;
   }
 
-  bool delete_entry(KeyType key) {
+  bool delete_entry(KeyType key, ValueType value) {
     while (!apend_delete(key)) {
       LOG_INFO("delete_entry fail, retry...");
     }

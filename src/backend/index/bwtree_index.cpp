@@ -56,8 +56,12 @@ bool BWTreeIndex<KeyType, ValueType, KeyComparator,
                                                   const storage::Tuple *key,
                                                   __attribute__((unused))
                                                   const ItemPointer location) {
-  // Add your implementation here
-  return false;
+  KeyType index_key;
+  index_key.SetFromKey(key);
+
+  auto key_pair = std::pair<KeyType, ValueType>(index_key, location);
+
+  return container.delete_entry(key_pair.first, key_pair.second);
 }
 
 template <typename KeyType, typename ValueType, class KeyComparator,

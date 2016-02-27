@@ -344,24 +344,6 @@ class BWTree {
     // construction added -mavis
     enum RecordType { INSERT = 0, DELETE = 1, UPDATE = 2 };
 
-    RecordDelta(PidType next, RecordType op, KeyType k,
-                MappingTable& mapping_table)
-        : Node(NodeType::RECORD_DELTA, 0, mapping_table) {
-      op_type = op;
-      key = k;
-      // Get node* of original node form mapping_table
-      Node* orig_node = mapping_table.get(next);
-
-      prepend(this, orig_node);
-
-      // update the slotuse of the new delta node
-      if (op_type == INSERT) {
-        this->slotuse = (unsigned short)(orig_node->slotuse + 1);
-      } else if (op_type == DELETE) {
-        this->slotuse = (unsigned short)(orig_node->slotuse - 1);
-      }
-    }
-
     RecordDelta(PidType next, RecordType op, KeyType k, ValueType v,
                 MappingTable& mapping_table)
         : Node(NodeType::RECORD_DELTA, 0, mapping_table) {
@@ -375,8 +357,6 @@ class BWTree {
       // update the slotuse of the new delta node
       if (op_type == INSERT) {
         this->slotuse = (unsigned short)(orig_node->slotuse + 1);
-      } else if (op_type == DELETE) {
-        this->slotuse = (unsigned short)(orig_node->slotuse - 1);
       }
 
       this->value = v;
@@ -481,6 +461,9 @@ class BWTree {
     return m_key_equal(a, b);
   }
 
+  inline bool value_equal(const ValueType& a, const ValueType& b) const {
+    return true;
+  }
   /*
     ************************************************
     * private functions, invisible to users -leiqi *
@@ -609,63 +592,70 @@ class BWTree {
     }
   }
 
-  bool is_in(KeyType key, Node* listhead) {
-    if (listhead == nullptr) return false;
+  int count_pair(KeyType key, Value value, Node* listhead, int &count) {
+    if (listhead == nullptr) return count;
 
     Node* node = listhead;
     switch (node->node_type) {
       case RECORD_DELTA:
         RecordDelta* rcd_node = (RecordDelta*)node;
-        if (rcd_node->op_type == RecordDelta::INSERT &&
-            key_equal(rcd_node->key, key)) {
-          return true;
+        if (rcd_node->op_type == RecordDelta::INSERT
+            && key_equal(rcd_node->key, key)
+            && value_equal(rcd_node->value, value)) {
+          count++;
         } else if (rcd_node->op_type == RecordDelta::DELETE &&
                    key_equal(rcd_node->key, key)) {
-          return false;
+          return count;
         }
-        return is_in(key, node->next);
+        break;
       case LEAF:
         LeafNode* lf_node = (LeafNode*)node;
         for (int i = 0; i < (lf_node->slotuse); i++) {
           if (key_equal(lf_node->slotkey[i], key)) {
-            return true;
+            for (ValueType v: *(lf_node->slotdata[i])){
+              if(value_equal(v, value))
+                count++;
+            }
+            break;
           }
         }
-        return false;
+        return count;
       case MERGE_DELTA:
         if (key_greaterequal(key, ((MergeDelta*)node)->Kp)) {
-          node = ((MergeDelta*)node)->orignal_node;
-          return is_in(key, node);
+          node = ((MergeDelta*)node)->Kp;
+          return count_pair(key, value, node, count);
         }
-        return is_in(key, node->next);
+        break;
 
       case SPLIT_DELTA:
         if (key_greaterequal(key, ((SplitDelta*)node)->Kp)) {
           PidType pid = ((SplitDelta*)node)->pQ;
-          return is_in(key, mapping_table.get(pid));
+          return count_pair(key, value, mapping_table.get(pid), count);
         }
-        return is_in(key, node->next);
-      default:
-        return false;
+        break;
     }
+    return count_pair(key, value, node->next, count);
   };
 
-  bool apend_delete(KeyType key) {
+  bool append_delete(KeyType key, ValueType value) {
+    int count = 0;
     std::stack<PidType> path = search(BWTree::root, key);
     if (path.empty()) {
       LOG_ERROR("InsertEntry get empty tree");
+      return false;
     }
     PidType basic_pid = path.top();
     path.pop();
 
     Node* basic_node = mapping_table.get(basic_pid);
-    if (!is_in(key, basic_node)) {
+    if (!count_pair(key,value, basic_node,count)) {
       LOG_INFO("DeleteEntry Not Exist");
       return false;
     }
 
     RecordDelta* new_delta =
-        new RecordDelta(basic_pid, RecordDelta::DELETE, key, mapping_table);
+        new RecordDelta(basic_pid, RecordDelta::DELETE, key, value, mapping_table);
+    new_delta->slotuse -= count;
     return mapping_table.set(basic_node->pid, new_delta);
   }
 
@@ -808,7 +798,7 @@ class BWTree {
   }
 
   bool delete_entry(KeyType key, ValueType value) {
-    while (!apend_delete(key)) {
+    while (!append_delete(key, value)) {
       LOG_INFO("delete_entry fail, retry...");
     }
 

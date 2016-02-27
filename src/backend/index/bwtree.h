@@ -738,16 +738,36 @@ class BWTree {
           next = nullptr;
         }
         case SPLIT_DELTA: {
-          SplitDelta * splitDelta = static_cast<SplitDelta *>(next);
-
+          SplitDelta *split_delta = static_cast<SplitDelta *>(next);
+          // if key >= Kp, we go to the new split node
+          if (key_greaterequal(key, split_delta->Kp)) {
+            LOG_ERROR("search result direct to another node");
+            next = mapping_table.get(split_delta->pQ);
+          }
+          // else we go alone this delta chain
+          else {
+            next = split_delta->next;
+          }
         }
+        case MERGE_DELTA: {
+          MergeDelta *merge_delta = static_cast<MergeDelta *>(next);
+          // if key >= Kp, we go to the original node
+          if (key_greaterequal(key, merge_delta->Kp)) {
+            next = merge_delta->orignal_node;
+          }
+          // else we go alone this delta chain
+          else {
+            next = merge_delta->next;
+          }
+        }
+        case REMOVE_NODE_DELTA:
+          // if we meet remove node delta, we can search from the root again.
+          result.clear();
+          get_value(key, result);
+        default:
+          LOG_ERROR("meet wrong delta: %d during get_value", next->node_type);
       }
     }
-
-
-    //switch(recorddelta, merge, split)
-    // "until meet first delet record"
-
   }
 
   // public method exposed to users -mavis

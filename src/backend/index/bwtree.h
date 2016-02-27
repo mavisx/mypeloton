@@ -54,7 +54,7 @@ enum NodeType {
 // Look up the stx btree interface for background.
 // peloton/third_party/stx/btree.h
 template <typename KeyType, typename ValueType, class KeyComparator,
-          typename KeyEqualityChecker>
+          typename KeyEqualityChecker, class ValueEqualityChecker>
 class BWTree {
  public:
   // *** Constructed Types
@@ -433,8 +433,8 @@ class BWTree {
 
  public:
   // constructor
-  BWTree(const KeyComparator& kc, const KeyEqualityChecker& ke)
-      : m_key_less(kc), m_key_equal(ke) {
+  BWTree(const KeyComparator& kc, const KeyEqualityChecker& ke, const ValueEqualityChecker& ve)
+      : m_key_less(kc), m_key_equal(ke), m_value_equal(ve) {
     LeafNode* addr = new LeafNode(mapping_table);
     long newpid = mapping_table.add(addr);
     if (newpid >= 0) {
@@ -489,6 +489,7 @@ class BWTree {
  private:
   KeyComparator m_key_less;
   KeyEqualityChecker m_key_equal;
+  ValueEqualityChecker m_value_equal;
 
   std::stack<PidType> search(PidType pid, KeyType key) {
     auto node = mapping_table.get(pid);
@@ -717,8 +718,9 @@ class BWTree {
           RecordDelta *node = static_cast<RecordDelta *>(next);
           if (key_equal(node->key, key)) {
             if (node->op_type == RecordDelta::RecordType::UPDATE) {
-              result.clear();
+              // if we meet a "update" all later value associated with this key is invalid.
               result.push_back(node->value);
+              return;
             } else if (node->op_type == RecordDelta::RecordType::INSERT) {
               result.push_back(node->value);
             } else if (node->op_type == RecordDelta::RecordType::DELETE) {

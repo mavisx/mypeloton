@@ -26,6 +26,17 @@
 namespace peloton {
 namespace index {
 
+
+class ItemPointerEqualityChecker {
+ public:
+  ItemPointerEqualityChecker() {}
+
+  inline bool operator()(const ItemPointer &lhs,
+                         const ItemPointer &rhs) const {
+    return (lhs.block == rhs.block) && (lhs.offset == rhs.offset);
+  }
+};
+
 /**
  * BW tree-based index implementation.
  *

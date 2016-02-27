@@ -59,9 +59,7 @@ bool BWTreeIndex<KeyType, ValueType, KeyComparator,
   KeyType index_key;
   index_key.SetFromKey(key);
 
-  auto key_pair = std::pair<KeyType, ValueType>(index_key, location);
-
-  return container.delete_entry(key_pair.first, key_pair.second);
+  return container.delete_entry(index_key, location);
 }
 
 template <typename KeyType, typename ValueType, class KeyComparator,
@@ -74,6 +72,9 @@ BWTreeIndex<KeyType, ValueType, KeyComparator, KeyEqualityChecker>::Scan(
     __attribute__((unused)) const ScanDirectionType &scan_direction) {
   std::vector<ItemPointer> result;
   // Add your implementation here
+
+
+
   return result;
 }
 
@@ -82,7 +83,9 @@ template <typename KeyType, typename ValueType, class KeyComparator,
 std::vector<ItemPointer> BWTreeIndex<KeyType, ValueType, KeyComparator,
                                      KeyEqualityChecker>::ScanAllKeys() {
   std::vector<ItemPointer> result;
-  // Add your implementation here
+
+  container.scan_all(result);
+
   return result;
 }
 

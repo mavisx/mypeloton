@@ -15,6 +15,5 @@
 namespace peloton {
 namespace index {
 
-
 }  // End index namespace
 }  // End peloton namespace

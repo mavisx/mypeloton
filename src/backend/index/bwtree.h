@@ -625,19 +625,20 @@ class BWTree {
 
     Node* node = listhead;
     switch (node->node_type) {
-      case RECORD_DELTA:
-        RecordDelta* rcd_node = (RecordDelta*)node;
+      case RECORD_DELTA: {
+        RecordDelta *rcd_node = (RecordDelta *) node;
         if (rcd_node->op_type == RecordDelta::INSERT
             && key_equal(rcd_node->key, key)
             && (!deleted.count(rcd_node->value))) {
           return true;
         }
         else if (rcd_node->op_type == RecordDelta::DELETE
-                 && key_equal(rcd_node->key, key)) {
+            && key_equal(rcd_node->key, key)) {
           deleted.insert(rcd_node->value);
         }
         return key_is_in(key, node->next, deleted);
-      case LEAF:
+      }
+      case LEAF: {
         LeafNode* lf_node = (LeafNode*)node;
         for (int i = 0; i < (lf_node->slotuse); i++) {
           if (key_equal(lf_node->slotkey[i], key)) {
@@ -650,19 +651,21 @@ class BWTree {
           }
         }
         return false;
-      case MERGE_DELTA:
-        if (key_greaterequal(key, ((MergeDelta*)node)->Kp)) {
-          node = ((MergeDelta*)node)->orignal_node;
+      }
+      case MERGE_DELTA: {
+        if (key_greaterequal(key, ((MergeDelta *) node)->Kp)) {
+          node = ((MergeDelta *) node)->orignal_node;
           return key_is_in(key, node, deleted);
         }
         return key_is_in(key, node->next, deleted);
-
-      case SPLIT_DELTA:
-        if (key_greaterequal(key, ((SplitDelta*)node)->Kp)) {
-          PidType pid = ((SplitDelta*)node)->pQ;
+      }
+      case SPLIT_DELTA: {
+        if (key_greaterequal(key, ((SplitDelta *) node)->Kp)) {
+          PidType pid = ((SplitDelta *) node)->pQ;
           return key_is_in(key, mapping_table.get(pid), deleted);
         }
         return key_is_in(key, node->next, deleted);
+      }
       default:
         return false;
     }
@@ -682,51 +685,57 @@ class BWTree {
 
     Node* node = listhead;
     switch (node->node_type) {
-      case RECORD_DELTA:
-        RecordDelta* rcd_node = (RecordDelta*)node;
+      case RECORD_DELTA: {
+        RecordDelta *rcd_node = (RecordDelta *) node;
         if (rcd_node->op_type == RecordDelta::INSERT
             && key_equal(rcd_node->key, key)
             && (!deleted.count(rcd_node->value))) {
           total_count++;
-          if(value_equal(rcd_node->value, value)) {
+          if (value_equal(rcd_node->value, value)) {
             pair_count++;
           }
         }
         else if (rcd_node->op_type == RecordDelta::DELETE &&
-                   key_equal(rcd_node->key, key)) {
+            key_equal(rcd_node->key, key)) {
           deleted.insert(rcd_node->value);
         }
+      }
         break;
-      case LEAF:
-        LeafNode* lf_node = (LeafNode*)node;
+      case LEAF: {
+        LeafNode *lf_node = (LeafNode *) node;
         for (int i = 0; i < (lf_node->slotuse); i++) {
           if (key_equal(lf_node->slotkey[i], key)) {
-            for (ValueType v: *(lf_node->slotdata[i])){
-              if(deleted.count(v)) continue;
+            for (ValueType v: *(lf_node->slotdata[i])) {
+              if (deleted.count(v)) continue;
               total_count++;
-              if(value_equal(v, value))
+              if (value_equal(v, value))
                 pair_count++;
             }
             break;
           }
         }
+      }
         return pair_count;
-      case MERGE_DELTA:
-        if (key_greaterequal(key, ((MergeDelta*)node)->Kp)) {
-          node = ((MergeDelta*)node)->Kp;
+      case MERGE_DELTA: {
+        if (key_greaterequal(key, ((MergeDelta *) node)->Kp)) {
+          node = ((MergeDelta *) node)->orignal_node;
           return count_pair(key, value, node, total_count, pair_count, deleted);
         }
+      }
         break;
 
-      case SPLIT_DELTA:
-        if (key_greaterequal(key, ((SplitDelta*)node)->Kp)) {
-          PidType pid = ((SplitDelta*)node)->pQ;
+      case SPLIT_DELTA: {
+        if (key_greaterequal(key, ((SplitDelta *) node)->Kp)) {
+          PidType pid = ((SplitDelta *) node)->pQ;
           return count_pair(key, value, mapping_table.get(pid),
                             total_count, pair_count, deleted);
         }
+      }
+        break;
+      default:
         break;
     }
-    count_pair(key, value, node->next, total_count, pair_count, deleted);
+    return count_pair(key, value, node->next, total_count, pair_count, deleted);
   };
 
   std::pair<int, int> count_pair(KeyType key, ValueType value, Node* listhead) {
@@ -879,28 +888,28 @@ class BWTree {
     Node* basic_node = mapping_table.get(basic_pid);
 
 
-    SplitDelta* new_split;
-    // check if the leaf node need to be split before we add record delta
-    if ( basic_node -> need_split() ) {
-      KeyType pivotal;
-
-      // create a slibling leaf node
-      PidType new_leaf_pid = create_leaf(basic_pid, &pivotal);
-
-      // ceate and prepend a split node
-      new_split = new SplitDelta(basic_node, pivotal,
-                                             new_leaf_pid, mapping_table, new_leaf_pid);
-
-      if ( !mapping_table.set(basic_pid, new_split, basic_node)) {
-        //TODO: if the CAS fails, release the new_split obj
-        delete new_split;
-      }
-
-    }
+//    SplitDelta* new_split;
+//    // check if the leaf node need to be split before we add record delta
+//    if ( basic_node -> need_split() ) {
+//      KeyType pivotal;
+//
+//      // create a slibling leaf node
+//      PidType new_leaf_pid = create_leaf(basic_pid, &pivotal);
+//
+//      // ceate and prepend a split node
+//      new_split = new SplitDelta(basic_node, pivotal,
+//                                             new_leaf_pid, mapping_table, new_leaf_pid);
+//
+//      if ( !mapping_table.set(basic_pid, new_split, basic_node)) {
+//        //TODO: if the CAS fails, release the new_split obj
+//        delete new_split;
+//      }
+//
+//    }
 
     RecordDelta* new_delta = new RecordDelta(basic_pid, RecordDelta::INSERT,
                                              key, value, mapping_table, basic_node->next_leafnode);
-    if( !key_is_in(key, new_split) )
+    if( !key_is_in(key, new_delta->next) )
       new_delta->slotuse = new_delta->next->slotuse+1;
 
     std::stack<PidType> now_path = search(BWTree::root, key);
@@ -941,7 +950,7 @@ class BWTree {
         return false;
       }
 
-      bool deletekey = (tv_count_pair.second>=tv_count_pair.first);
+      bool deletekey = (tv_count_pair.second >= tv_count_pair.first);
 
       redo = append_delete(basic_node, key, value, deletekey);
     }
@@ -965,8 +974,11 @@ class BWTree {
     }
 
     // prepare two array to store what logical k-v pairs we have
-    std::vector<KeyType>* tmpkeys = new std::vector<KeyType>();
-    std::vector<std::vector<ValueType>*>* tmpvals = new std::vector<std::vector<ValueType>*>();
+    std::vector<KeyType>* tmpkeys_pointer = new std::vector<KeyType>();
+    std::vector<KeyType> & tmpkeys = *tmpkeys_pointer;
+
+    std::vector<std::vector<ValueType>*>* tmpvals_pointer = new std::vector<std::vector<ValueType>*>();
+    std::vector<std::vector<ValueType>*>& tmpvals = *tmpvals_pointer;
 
     // the first node must be the original leaf node itself
     LeafNode* orig_leaf_node = static_cast<LeafNode*>(delta_chain.top());
@@ -974,8 +986,8 @@ class BWTree {
 
     // copy the data in the base node
     for (int i = 0; i < orig_leaf_node->slotuse; i++) {
-      tmpkeys[i] = orig_leaf_node->slotkey[i];
-      tmpvals = new std::vector<ValueType>(*(orig_leaf_node->slotdata[i]) );
+      tmpkeys.push_back(orig_leaf_node->slotkey[i]);
+      tmpvals.push_back(new std::vector<ValueType>(*(orig_leaf_node->slotdata[i])));
     }
 
     // traverse the delta chain
@@ -993,7 +1005,7 @@ class BWTree {
           if (recordDelta->op_type == RecordDelta::INSERT) {
             for (int x = 0; x < recordDelta->slotuse; x++) {
               if (key_equal(tmpkeys[x], recordDelta->key)) {
-                (*tmpvals)[x]->push_back(recordDelta->value);
+                tmpvals[x]->push_back(recordDelta->value);
                 no_dedup = false;
                 break;
               }
@@ -1001,50 +1013,45 @@ class BWTree {
             // key not exists, need to insert somewhere
             if (no_dedup) {
               if (recordDelta->slotuse == 0) {
-                tmpkeys[0] = recordDelta->key;
-                (*tmpvals)[0] = new std::vector<ValueType>();
-                (*tmpvals)[0]->push_back(recordDelta->value);
+                tmpkeys.push_back(recordDelta->key);
+                tmpvals.push_back(new std::vector<ValueType>());
+                tmpvals[0]->push_back(recordDelta->value);
               } else {
                 int target_pos = 0;
-                for (int x = recordDelta->slotuse; x > 0; x--) {
-                  if (key_less(recordDelta->key, tmpkeys[x - 1])) {
-                    tmpkeys[x] = tmpkeys[x - 1];
-                    tmpvals[x] = tmpvals[x - 1];
-                  } else {
-                    target_pos = x;
+                for (int x = recordDelta->slotuse-1; x >= 0; x--) {
+                  if (key_greaterequal(recordDelta->key, tmpkeys[x])) {
+                    target_pos = x + 1;
                     break;
                   }
                 }
-                tmpkeys[target_pos] = recordDelta->key;
-                (*tmpvals)[target_pos] = new std::vector<ValueType>();
-                (*tmpvals)[target_pos]->push_back(recordDelta->value);
+
+                tmpkeys.insert(tmpkeys.begin() + target_pos, recordDelta->key);
+                tmpvals.insert(tmpvals.begin() + target_pos, new std::vector<ValueType>());
+                tmpvals[target_pos]->push_back(recordDelta->value);
               }
             } // end of RecordDelta::INSERT
 
 
           } else if (recordDelta->op_type == RecordDelta::DELETE) {
+            assert(tmpvals.size() == recordDelta->slotuse);
 
-            int target_pos = recordDelta->slotuse - 1;
-            bool need_remove = false;
             for (int x = 0; x < recordDelta->slotuse; x++) {
               if (key_equal(tmpkeys[x], recordDelta->key)) {
                 // remove value in the vector
-                (*tmpvals)[x]->erase( recordDelta->value );
+                for (int j = tmpvals[x]->size() - 1; j>=0; j--) {
+                  if (m_value_equal(tmpvals[x]->at(j), recordDelta->value)) {
+                    tmpvals[x]->erase( tmpvals[x]->begin() + j );
+                  }
+                }
+
 
                 // if vector is empty, needed to be removed
-                if( (*tmpvals)[x]->size() == 0 ){
-                  need_remove = true;
+                if( tmpvals[x]->size() == 0 ){
+                  delete tmpvals[x];
+                  tmpkeys.erase(tmpkeys.begin() + x);
+                  tmpvals.erase(tmpvals.begin() + x);
                 }
-                target_pos = x;
                 break;
-              }
-            }
-
-            if( need_remove ) {
-              delete tmpvals[target_pos];
-              for (int x = target_pos; x < cur_delta->slotuse - 1; x++) {
-                tmpkeys[x] = tmpkeys[x + 1];
-                tmpvals[x] = tmpvals[x + 1];
               }
             }
 
@@ -1057,11 +1064,14 @@ class BWTree {
           break;
         case REMOVE_NODE_DELTA:
           break;
+        case LEAF:
+          LOG_ERROR("Wrong leaf delta!");
+        default:
+          break;
       }
     }
 
-    return std::make_pair(tmpkeys, tmpvals);
-
+    return std::make_pair(tmpkeys_pointer, tmpvals_pointer);
   }
 
   PidType create_leaf(PidType new_delta_pid, KeyType* pivotal) {
@@ -1096,21 +1106,23 @@ class BWTree {
     while (node != nullptr) {
       auto all_key_value_pair =  fake_consolidate(node);
 
-      v.insert(v.end(), all_key_value_pair.second->begin(), all_key_value_pair.second->end());
+      for(auto const& value: *(all_key_value_pair.second)) {
+        v.insert(v.end(), value->begin(), value->end());
+      }
 
       node = mapping_table.get(node->next_leafnode);
     }
   }
 
   void scan(std::vector<KeyType> &keys_result,
-      std::vector<ItemPointer> &values_result) {
+      std::vector<std::vector<ItemPointer>*> &values_result) {
     Node * node = mapping_table.get(headleaf);
 
     // scan the leaf nodes list from begin to the end
     while (node != nullptr) {
       auto all_key_value_pair =  fake_consolidate(node);
-      auto keys = *all_key_value_pair.first;
-      auto values = *all_key_value_pair.second;
+      std::vector<KeyType> keys = *(all_key_value_pair.first);
+      std::vector<std::vector<ValueType>*> values = *(all_key_value_pair.second);
 
       keys_result.insert(keys_result.end(), keys.begin(), keys.end());
       values_result.insert(values_result.end(), values.begin(), values.end());

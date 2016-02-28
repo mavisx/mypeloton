@@ -85,7 +85,7 @@ BWTreeIndex<KeyType, ValueType, KeyComparator, KeyEqualityChecker>::Scan(
     __attribute__((unused)) const std::vector<ExpressionType> &expr_types,
     __attribute__((unused)) const ScanDirectionType &scan_direction) {
   std::vector<KeyType> keys_result;
-  std::vector<ItemPointer> values_result;
+  std::vector<std::vector<ItemPointer>*> values_result;
   std::vector<ItemPointer> result;
 
   {
@@ -101,7 +101,7 @@ BWTreeIndex<KeyType, ValueType, KeyComparator, KeyEqualityChecker>::Scan(
             // Compare the current key in the scan with "values" based on "expression types"
             // For instance, "5" EXPR_GREATER_THAN "2" is true
             if (Compare(tuple, key_column_ids, expr_types, values) == true) {
-              result.push_back(values_result[i]);
+              result.insert(result.end(), values_result[i]->begin(), values_result[i]->end());
             }
           }
         }

@@ -699,8 +699,8 @@ class BWTree {
       return false;
     }
 
-    RecordDelta* new_delta =
-        new RecordDelta(basic_node->pid, RecordDelta::DELETE, key, value,
+
+    RecordDelta* new_delta = new RecordDelta(basic_node->pid, RecordDelta::DELETE, key, value,
                         mapping_table, basic_node->next_leafnode);
 
     new_delta->slotuse -= count;

@@ -356,10 +356,10 @@ class BWTree {
       prepend(this, orig_node);
 
       // update the slotuse of the new delta node
-      if (op_type == INSERT) {
-        if( !key_is_in(k,orig_node) )
+     /* if (op_type == INSERT) {
+        if( !key_is_in(k, orig_node) )
           this->slotuse = (unsigned short)(orig_node->slotuse + 1);
-      }
+      }*/
 
       this->value = v;
     }
@@ -694,7 +694,7 @@ class BWTree {
     path.pop();
 
     Node* basic_node = mapping_table.get(basic_pid);
-    if (!count_pair(key,value, basic_node,count)) {
+    if (!pair_is_in(key,value, basic_node,count)) {
       LOG_INFO("DeleteEntry Not Exist");
       return false;
     }
@@ -830,6 +830,7 @@ class BWTree {
     Node* basic_node = mapping_table.get(basic_pid);
 
 
+    SplitDelta* new_split;
     // check if the leaf node need to be split before we add record delta
     if ( basic_node -> need_split() ) {
       KeyType pivotal;
@@ -838,7 +839,7 @@ class BWTree {
       PidType new_leaf_pid = create_leaf(basic_pid, &pivotal);
 
       // ceate and prepend a split node
-      SplitDelta* new_split = new SplitDelta(basic_node, pivotal,
+      new_split = new SplitDelta(basic_node, pivotal,
                                              new_leaf_pid, mapping_table, new_leaf_pid);
 
       if ( !mapping_table.set(basic_pid, new_split, basic_node)) {
@@ -850,6 +851,8 @@ class BWTree {
 
     RecordDelta* new_delta = new RecordDelta(basic_pid, RecordDelta::INSERT,
                                              key, value, mapping_table, basic_node->next_leafnode);
+    if( !key_is_in(key, new_split) )
+      new_delta->slotuse = new_delta->next->slotuse+1;
 
     std::stack<PidType> now_path = search(BWTree::root, key);
     if ( now_path.empty() ) {

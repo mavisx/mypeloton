@@ -355,8 +355,8 @@ class BWTree {
 
       // update the slotuse of the new delta node
       if (op_type == INSERT) {
-        if( is_in() )
-        this->slotuse = (unsigned short)(orig_node->slotuse + 1);
+        if( !key_is_in(k,orig_node) )
+          this->slotuse = (unsigned short)(orig_node->slotuse + 1);
       }
 
       this->value = v;
@@ -855,8 +855,8 @@ class BWTree {
     }
 
     // prepare two array to store what logical k-v pairs we have
-    KeyType* tmpkeys = new KeyType[leafslotmax + 1];
-    std::vector<ValueType>** tmpvals = new std::vector<ValueType>*[leafslotmax + 1];
+    std::vector<KeyType>* tmpkeys = new std::vector<KeyType>();
+    std::vector<std::vector<ValueType>*>* tmpvals = new std::vector<std::vector<ValueType>*>();
 
     // the first node must be the original leaf node itself
     LeafNode* orig_leaf_node = dynamic_cast<LeafNode*>(delta_chain.top());
@@ -865,7 +865,7 @@ class BWTree {
     // copy the data in the base node
     for (int i = 0; i < orig_leaf_node->slotuse; i++) {
       tmpkeys[i] = orig_leaf_node->slotkey[i];
-      tmpvals[i] = new std::vector<ValueType>(*orig_leaf_node->slotdata[i]);
+      tmpvals = new std::vector<ValueType>(*(orig_leaf_node->slotdata[i]) );
     }
 
     // traverse the delta chain
@@ -883,7 +883,7 @@ class BWTree {
           if (recordDelta->op_type == RecordDelta::INSERT) {
             for (int x = 0; x < cur_delta->slotuse; x++) {
               if (key_equal(tmpkeys[x], recordDelta->key)) {
-                tmpvals[x]->push_back(recordDelta->value);
+                (*tmpvals)[x]->push_back(recordDelta->value);
                 no_dedup = false;
                 break;
               }
@@ -892,8 +892,8 @@ class BWTree {
             if (no_dedup) {
               if (cur_delta->slotuse == 0) {
                 tmpkeys[0] = recordDelta->key;
-                tmpvals[0] = new std::vector<ValueType>();
-                tmpvals[0]->push_back(recordDelta->value);
+                (*tmpvals)[0] = new std::vector<ValueType>();
+                (*tmpvals)[0]->push_back(recordDelta->value);
               } else {
                 int target_pos = 0;
                 for (int x = cur_delta->slotuse; x > 0; x--) {
@@ -906,8 +906,8 @@ class BWTree {
                   }
                 }
                 tmpkeys[target_pos] = recordDelta->key;
-                tmpvals[target_pos] = new std::vector<ValueType>();
-                tmpvals[target_pos]->push_back(recordDelta->value);
+                (*tmpvals)[target_pos] = new std::vector<ValueType>();
+                (*tmpvals)[target_pos]->push_back(recordDelta->value);
               }
             } // end of RecordDelta::INSERT
 

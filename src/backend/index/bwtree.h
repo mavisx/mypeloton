@@ -55,10 +55,27 @@ enum NodeType {
 };
 
 
+class ItemPointerEqualityChecker {
+ public:
+  inline bool operator()(const ItemPointer &lhs,
+                         const ItemPointer &rhs) const {
+    return (lhs.block == rhs.block) && (lhs.offset == rhs.offset);
+  }
+};
+
+class ItemPointerComparator {
+ public:
+  inline bool operator()(const ItemPointer &lhs,
+                         const ItemPointer &rhs) const {
+    return (lhs.block < rhs.block) ||
+        ((lhs.block == rhs.block) && (lhs.offset < rhs.offset));
+  }
+};
+
 // Look up the stx btree interface for background.
 // peloton/third_party/stx/btree.h
 template <typename KeyType, typename ValueType, class KeyComparator,
-          typename KeyEqualityChecker, class ValueEqualityChecker>
+          typename KeyEqualityChecker>
 class BWTree {
  public:
   // *** Constructed Types
@@ -234,10 +251,10 @@ class BWTree {
     PidType next_leafnode;
 
       // constructor
-    Node(NodeType n, size_t delta_l, MappingTable& mt, PidType next_leaf) : mapping_table(mt) {
-      node_type = n;
+    Node(Node* ne, NodeType ntype, size_t delta_l, MappingTable& mt, PidType next_leaf) : mapping_table(mt) {
+      node_type = ntype;
       slotuse = 0;
-      next = nullptr;
+      next = ne;
       delta_list_len = delta_l;
       next_leafnode = next_leaf;
     }
@@ -279,7 +296,7 @@ class BWTree {
 
     /// Set variables to initial values
     InnerNode(MappingTable& mapping_table, PidType next_leafnode)
-        : Node(NodeType::INNER, 0, mapping_table, next_leafnode) {}
+        : Node(nullptr, NodeType::INNER, 0, mapping_table, next_leafnode) {}
 
     /// True if the node's slots are full
     inline bool isfull() const { return (Node::slotuse == innerslotmax); }
@@ -308,7 +325,7 @@ class BWTree {
     std::vector<ValueType>* slotdata[leafslotmax + 1];
 
     LeafNode(MappingTable& mapping_table, PidType next_leafnode )
-        : Node(NodeType::LEAF, 0, mapping_table, next_leafnode ){
+        : Node(nullptr, NodeType::LEAF, 0, mapping_table, next_leafnode ){
       // initialize the value bucket
       for (int i = 0; i < leafslotmax + 1; i++) {
         slotdata[i] = nullptr;
@@ -351,7 +368,7 @@ class BWTree {
 
     RecordDelta(PidType next, RecordType op, KeyType k, ValueType v,
                 MappingTable& mapping_table,  PidType next_leafnode)
-        : Node(NodeType::RECORD_DELTA, 0, mapping_table, next_leafnode ) {
+        : Node(nullptr, NodeType::RECORD_DELTA, 0, mapping_table, next_leafnode ) {
       op_type = op;
       key = k;
       // Get node* of original node form mapping_table
@@ -375,7 +392,7 @@ class BWTree {
   // Delta Node for spliting operation
   struct SplitDelta : public Node {
     SplitDelta(Node* next, KeyType Kp, PidType pQ, MappingTable& mapping_table,  PidType next_leafnode )
-        : Node(NodeType::SPLIT_DELTA, 0, mapping_table, next_leafnode ), Kp(Kp), pQ(pQ) {}
+        : Node(next, NodeType::SPLIT_DELTA, 0, mapping_table, next_leafnode ), Kp(Kp), pQ(pQ) {}
     KeyType Kp;
     PidType pQ;
   };
@@ -383,7 +400,7 @@ class BWTree {
   struct IndexEntryDelta : public Node {
     IndexEntryDelta(Node* next, KeyType Kp, KeyType Kq, PidType pQ,
                     MappingTable& mapping_table, PidType next_leafnode)
-        : Node(NodeType::INDEX_ENTRY_DELTA, 0, mapping_table, next_leafnode),
+        : Node(next, NodeType::INDEX_ENTRY_DELTA, 0, mapping_table, next_leafnode),
           Kp(Kp),
           Kq(Kq),
           pQ(pQ) {}
@@ -394,13 +411,13 @@ class BWTree {
   // Delta Node for merging operation
   struct RemoveDelta : public Node {
     RemoveDelta(Node* next, MappingTable& mapping_table, PidType next_leafnode)
-        : Node(NodeType::REMOVE_NODE_DELTA, 0, mapping_table, next_leafnode ) {}
+        : Node(next, NodeType::REMOVE_NODE_DELTA, 0, mapping_table, next_leafnode ) {}
   };
 
   struct MergeDelta : public Node {
     MergeDelta(Node* next, KeyType Kp, Node* orignal_node,
                MappingTable& mapping_table,  PidType next_leafnode)
-        : Node(NodeType::MERGE_DELTA, 0, mapping_table, next_leafnode ),
+        : Node(next, NodeType::MERGE_DELTA, 0, mapping_table, next_leafnode ),
           Kp(Kp),
           orignal_node(orignal_node) {}
     KeyType Kp;
@@ -410,7 +427,7 @@ class BWTree {
   struct DeleteIndexDelta : public Node {
     DeleteIndexDelta(Node* next, KeyType Kp, KeyType Kq, PidType pQ,
                      MappingTable& mapping_table, PidType next_leafnode)
-        : Node(NodeType::INDEX_ENTRY_DELTA, 0, mapping_table, next_leafnode),
+        : Node(next, NodeType::INDEX_ENTRY_DELTA, 0, mapping_table, next_leafnode),
           Kp(Kp),
           Kq(Kq),
           pQ(pQ) {}
@@ -421,8 +438,8 @@ class BWTree {
  public:
   // constructor
 
-  BWTree(const KeyComparator& kc, const KeyEqualityChecker& ke, const ValueEqualityChecker& ve)
-      : m_key_less(kc), m_key_equal(ke), m_value_equal(ve) {
+  BWTree(const KeyComparator& kc, const KeyEqualityChecker& ke)
+      : m_key_less(kc), m_key_equal(ke), m_value_equal(ItemPointerEqualityChecker()) {
     LeafNode* addr = new LeafNode(mapping_table, NULL_PID );
    long newpid = mapping_table.add(addr);
     if (newpid >= 0) {
@@ -480,7 +497,7 @@ class BWTree {
  private:
   KeyComparator m_key_less;
   KeyEqualityChecker m_key_equal;
-  ValueEqualityChecker m_value_equal;
+  ItemPointerEqualityChecker m_value_equal;
 
   std::stack<PidType> search(PidType pid, KeyType key) {
     auto node = mapping_table.get(pid);
@@ -601,7 +618,7 @@ class BWTree {
   }
 
 
-  typedef std::unordered_set<ValueType,std::hash<ValueType>, m_value_equal> DelSet;
+  typedef std::unordered_set<ValueType,std::hash<ValueType>, ItemPointerEqualityChecker> DelSet;
 
   inline bool key_is_in(KeyType key, Node* listhead) {
     DelSet deleted_set;
@@ -657,7 +674,7 @@ class BWTree {
 
   }
 
-  std::pair<int, int> count_pair(KeyType key, Value value, Node* listhead) {
+  std::pair<int, int> count_pair(KeyType key, ValueType value, Node* listhead) {
     int total_count = 0;
     int pair_count = 0;
     DelSet deleted_set;
@@ -785,7 +802,7 @@ class BWTree {
     while (next) {
       switch (next->node_type) {
         case RECORD_DELTA : {
-          RecordDelta *node = dynamic_cast<RecordDelta *>(next);
+          RecordDelta *node = static_cast<RecordDelta *>(next);
           if (key_equal(node->key, key)) {
             if (node->op_type == RecordDelta::RecordType::INSERT) {
               if (delset.find(node->value) == delset.end())
@@ -798,20 +815,20 @@ class BWTree {
           next = node->next;
         }
         case LEAF: {
-          LeafNode * leaf = dynamic_cast<LeafNode *>(next);
+          LeafNode * leaf = static_cast<LeafNode *>(next);
           for (int i=0; i < leaf->slotuse; i++) {
             if (key_equal(leaf->slotkey[i], key)) {
               unsigned long vsize = leaf->slotdata[i]->size();
-              for (int j; j<vsize; j++) {
-                if (delset.find(leaf->slotdata[i][j]) == delset.end())
-                  result.push_back(leaf->slotdata[i][j]);
+              for (int j=0; j<vsize; j++) {
+                if (delset.find(leaf->slotdata[i]->at(j)) == delset.end())
+                  result.push_back(leaf->slotdata[i]->at(j));
               }
             }
           }
           next = nullptr;
         }
         case SPLIT_DELTA: {
-          SplitDelta *split_delta = dynamic_cast<SplitDelta *>(next);
+          SplitDelta *split_delta = static_cast<SplitDelta *>(next);
           // if key >= Kp, we go to the new split node
           if (key_greaterequal(key, split_delta->Kp)) {
             LOG_ERROR("search result direct to another node");
@@ -823,7 +840,7 @@ class BWTree {
           }
         }
         case MERGE_DELTA: {
-          MergeDelta *merge_delta = dynamic_cast<MergeDelta *>(next);
+          MergeDelta *merge_delta = static_cast<MergeDelta *>(next);
           // if key >= Kp, we go to the original node
           if (key_greaterequal(key, merge_delta->Kp)) {
             next = merge_delta->orignal_node;
@@ -912,7 +929,7 @@ class BWTree {
       path.pop();
 
       Node* basic_node = mapping_table.get(basic_pid);
-      auto tv_count_pair = count_pair(key,value, basic_node);
+      auto tv_count_pair = count_pair(key, value, basic_node);
       if (!tv_count_pair.second) {
         LOG_INFO("DeleteEntry Not Exist");
         return false;
@@ -946,7 +963,7 @@ class BWTree {
     std::vector<std::vector<ValueType>*>* tmpvals = new std::vector<std::vector<ValueType>*>();
 
     // the first node must be the original leaf node itself
-    LeafNode* orig_leaf_node = dynamic_cast<LeafNode*>(delta_chain.top());
+    LeafNode* orig_leaf_node = static_cast<LeafNode*>(delta_chain.top());
     delta_chain.pop();
 
     // copy the data in the base node
@@ -965,7 +982,7 @@ class BWTree {
         case RECORD_DELTA: {
           // first see the key has already existed
           bool no_dedup = true;
-          RecordDelta *recordDelta = dynamic_cast<RecordDelta *>(cur_delta);
+          RecordDelta *recordDelta = static_cast<RecordDelta *>(cur_delta);
 
           if (recordDelta->op_type == RecordDelta::INSERT) {
             for (int x = 0; x < recordDelta->slotuse; x++) {
@@ -1006,7 +1023,7 @@ class BWTree {
             for (int x = 0; x < recordDelta->slotuse; x++) {
               if (key_equal(tmpkeys[x], recordDelta->key)) {
                 // remove value in the vector
-                (*tmpvals)[x]->erase( recordDelta->);
+                (*tmpvals)[x]->erase( recordDelta->value );
 
                 // if vector is empty, needed to be removed
                 if( (*tmpvals)[x]->size() == 0 ){

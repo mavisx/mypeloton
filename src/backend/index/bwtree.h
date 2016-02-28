@@ -117,6 +117,9 @@ class BWTree {
     }
 
     Node* get(PidType pid) {
+      if (pid == NULL_PID)
+        return nullptr;
+
       long tier1_idx = GET_TIER1_INDEX(pid);
       long tier2_idx = GET_TIER2_INDEX(pid);
 
@@ -357,7 +360,7 @@ class BWTree {
 
       // update the slotuse of the new delta node
       if (op_type == INSERT) {
-        if( !key_is_in(k,orig_node) )
+        if( !is_in(k,orig_node) )
           this->slotuse = (unsigned short)(orig_node->slotuse + 1);
       }
 
@@ -762,11 +765,7 @@ class BWTree {
         case RECORD_DELTA : {
           RecordDelta *node = dynamic_cast<RecordDelta *>(next);
           if (key_equal(node->key, key)) {
-            if (node->op_type == RecordDelta::RecordType::UPDATE) {
-              // if we meet a "update" all later value associated with this key is invalid.
-              result.push_back(node->value);
-              return;
-            } else if (node->op_type == RecordDelta::RecordType::INSERT) {
+            if (node->op_type == RecordDelta::RecordType::INSERT) {
               result.push_back(node->value);
             } else if (node->op_type == RecordDelta::RecordType::DELETE) {
               // if we meet a "delete" all later value associated with this key is invalid.
@@ -883,7 +882,8 @@ class BWTree {
 
   bool update_entry(KeyType key, ValueType value);
 
-  std::pair<  KeyType*, std::vector<ValueType>** > fake_consolidate( Node* new_delta) {
+  std::pair<std::vector<KeyType>*, std::vector<std::vector<ValueType>*>*>
+      fake_consolidate( Node* new_delta) {
 
     std::stack<Node*> delta_chain;
     Node* tmp_cur_node = new_delta;
@@ -979,8 +979,6 @@ class BWTree {
 
     return std::make_pair(tmpkeys, tmpvals);
 
-
-
   }
 
   PidType create_leaf(PidType new_delta_pid, KeyType* pivotal) {
@@ -1007,7 +1005,6 @@ class BWTree {
     return new_leaf_pid;
 
   }
-  // interfaces of SCAN to be added -mavis
 
   void scan_all(std::vector<ValueType>& v) {
     Node * node = mapping_table.get(headleaf);
@@ -1016,9 +1013,26 @@ class BWTree {
     while (node != nullptr) {
       auto all_key_value_pair =  fake_consolidate(node);
 
-      v.insert(v.end(), all_key_value_pair.second.begin(), all_key_value_pair.second.end());
+      v.insert(v.end(), all_key_value_pair.second->begin(), all_key_value_pair.second->end());
 
-      node = mapping_table.get(node->next_node);
+      node = mapping_table.get(node->next_leafnode);
+    }
+  }
+
+  void scan(std::vector<KeyType> &keys_result,
+      std::vector<ItemPointer> &values_result) {
+    Node * node = mapping_table.get(headleaf);
+
+    // scan the leaf nodes list from begin to the end
+    while (node != nullptr) {
+      auto all_key_value_pair =  fake_consolidate(node);
+      auto keys = *all_key_value_pair.first;
+      auto values = *all_key_value_pair.second;
+
+      keys_result.insert(keys_result.end(), keys.begin(), keys.end());
+      values_result.insert(values_result.end(), values.begin(), values.end());
+
+      node = mapping_table.get(node->next_leafnode);
     }
   }
 

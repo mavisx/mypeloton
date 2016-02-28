@@ -778,6 +778,8 @@ class BWTree {
       return;
     }
 
+    DelSet delset;
+
     // traverse the delta chain from top down
     // to construct the correct result
     while (next) {
@@ -786,10 +788,11 @@ class BWTree {
           RecordDelta *node = dynamic_cast<RecordDelta *>(next);
           if (key_equal(node->key, key)) {
             if (node->op_type == RecordDelta::RecordType::INSERT) {
-              result.push_back(node->value);
+              if (delset.find(node->value) == delset.end())
+                result.push_back(node->value);
             } else if (node->op_type == RecordDelta::RecordType::DELETE) {
               // if we meet a "delete" all later value associated with this key is invalid.
-              return;
+              delset.insert(node->value);
             }
           }
           next = node->next;
@@ -798,7 +801,11 @@ class BWTree {
           LeafNode * leaf = dynamic_cast<LeafNode *>(next);
           for (int i=0; i < leaf->slotuse; i++) {
             if (key_equal(leaf->slotkey[i], key)) {
-              result.insert(result.end(), leaf->slotdata[i]->begin(), leaf->slotdata[i]->end());
+              unsigned long vsize = leaf->slotdata[i]->size();
+              for (int j; j<vsize; j++) {
+                if (delset.find(leaf->slotdata[i][j]) == delset.end())
+                  result.push_back(leaf->slotdata[i][j]);
+              }
             }
           }
           next = nullptr;

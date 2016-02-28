@@ -922,7 +922,7 @@ class BWTree {
           RecordDelta *recordDelta = dynamic_cast<RecordDelta *>(cur_delta);
 
           if (recordDelta->op_type == RecordDelta::INSERT) {
-            for (int x = 0; x < cur_delta->slotuse; x++) {
+            for (int x = 0; x < recordDelta->slotuse; x++) {
               if (key_equal(tmpkeys[x], recordDelta->key)) {
                 (*tmpvals)[x]->push_back(recordDelta->value);
                 no_dedup = false;
@@ -931,13 +931,13 @@ class BWTree {
             }
             // key not exists, need to insert somewhere
             if (no_dedup) {
-              if (cur_delta->slotuse == 0) {
+              if (recordDelta->slotuse == 0) {
                 tmpkeys[0] = recordDelta->key;
                 (*tmpvals)[0] = new std::vector<ValueType>();
                 (*tmpvals)[0]->push_back(recordDelta->value);
               } else {
                 int target_pos = 0;
-                for (int x = cur_delta->slotuse; x > 0; x--) {
+                for (int x = recordDelta->slotuse; x > 0; x--) {
                   if (key_less(recordDelta->key, tmpkeys[x - 1])) {
                     tmpkeys[x] = tmpkeys[x - 1];
                     tmpvals[x] = tmpvals[x - 1];
@@ -954,18 +954,29 @@ class BWTree {
 
 
           } else if (recordDelta->op_type == RecordDelta::DELETE) {
-            int target_pos = cur_delta->slotuse - 1;
-            for (int x = 0; x < cur_delta->slotuse; x++) {
+
+            int target_pos = recordDelta->slotuse - 1;
+            bool need_remove = false;
+            for (int x = 0; x < recordDelta->slotuse; x++) {
               if (key_equal(tmpkeys[x], recordDelta->key)) {
+                // remove value in the vector
+                (*tmpvals)[x]->erase( recordDelta->);
+
+                // if vector is empty, needed to be removed
+                if( (*tmpvals)[x]->size() == 0 ){
+                  need_remove = true;
+                }
                 target_pos = x;
                 break;
               }
             }
 
-            delete tmpvals[target_pos];
-            for (int x = target_pos; x < cur_delta->slotuse - 1; x++) {
-              tmpkeys[x] = tmpkeys[x + 1];
-              tmpvals[x] = tmpvals[x + 1];
+            if( need_remove ) {
+              delete tmpvals[target_pos];
+              for (int x = target_pos; x < cur_delta->slotuse - 1; x++) {
+                tmpkeys[x] = tmpkeys[x + 1];
+                tmpvals[x] = tmpvals[x + 1];
+              }
             }
 
           }

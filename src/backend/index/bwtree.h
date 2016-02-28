@@ -357,10 +357,10 @@ class BWTree {
       prepend(this, orig_node);
 
       // update the slotuse of the new delta node
-      if (op_type == INSERT) {
-        if( !key_is_in(k,orig_node) )
+     /* if (op_type == INSERT) {
+        if( !key_is_in(k, orig_node) )
           this->slotuse = (unsigned short)(orig_node->slotuse + 1);
-      }
+      }*/
 
       this->value = v;
     }
@@ -865,6 +865,7 @@ class BWTree {
     Node* basic_node = mapping_table.get(basic_pid);
 
 
+    SplitDelta* new_split;
     // check if the leaf node need to be split before we add record delta
     if ( basic_node -> need_split() ) {
       KeyType pivotal;
@@ -873,7 +874,7 @@ class BWTree {
       PidType new_leaf_pid = create_leaf(basic_pid, &pivotal);
 
       // ceate and prepend a split node
-      SplitDelta* new_split = new SplitDelta(basic_node, pivotal,
+      new_split = new SplitDelta(basic_node, pivotal,
                                              new_leaf_pid, mapping_table, new_leaf_pid);
 
       if ( !mapping_table.set(basic_pid, new_split, basic_node)) {
@@ -885,6 +886,8 @@ class BWTree {
 
     RecordDelta* new_delta = new RecordDelta(basic_pid, RecordDelta::INSERT,
                                              key, value, mapping_table, basic_node->next_leafnode);
+    if( !key_is_in(key, new_split) )
+      new_delta->slotuse = new_delta->next->slotuse+1;
 
     std::stack<PidType> now_path = search(BWTree::root, key);
     if ( now_path.empty() ) {
@@ -918,7 +921,7 @@ class BWTree {
 
   bool update_entry(KeyType key, ValueType value);
 
-  std::pair<  KeyType*, std::vector<ValueType>** > fake_consolidate( Node* new_delta) {
+  std::pair< std::vector<KeyType>*, std::vector<std::vector<ValueType>*>* > fake_consolidate( Node* new_delta) {
 
     std::stack<Node*> delta_chain;
     Node* tmp_cur_node = new_delta;
@@ -954,7 +957,7 @@ class BWTree {
           RecordDelta *recordDelta = dynamic_cast<RecordDelta *>(cur_delta);
 
           if (recordDelta->op_type == RecordDelta::INSERT) {
-            for (int x = 0; x < cur_delta->slotuse; x++) {
+            for (int x = 0; x < recordDelta->slotuse; x++) {
               if (key_equal(tmpkeys[x], recordDelta->key)) {
                 (*tmpvals)[x]->push_back(recordDelta->value);
                 no_dedup = false;
@@ -963,13 +966,13 @@ class BWTree {
             }
             // key not exists, need to insert somewhere
             if (no_dedup) {
-              if (cur_delta->slotuse == 0) {
+              if (recordDelta->slotuse == 0) {
                 tmpkeys[0] = recordDelta->key;
                 (*tmpvals)[0] = new std::vector<ValueType>();
                 (*tmpvals)[0]->push_back(recordDelta->value);
               } else {
                 int target_pos = 0;
-                for (int x = cur_delta->slotuse; x > 0; x--) {
+                for (int x = recordDelta->slotuse; x > 0; x--) {
                   if (key_less(recordDelta->key, tmpkeys[x - 1])) {
                     tmpkeys[x] = tmpkeys[x - 1];
                     tmpvals[x] = tmpvals[x - 1];
@@ -986,18 +989,29 @@ class BWTree {
 
 
           } else if (recordDelta->op_type == RecordDelta::DELETE) {
-            int target_pos = cur_delta->slotuse - 1;
-            for (int x = 0; x < cur_delta->slotuse; x++) {
+
+            int target_pos = recordDelta->slotuse - 1;
+            bool need_remove = false;
+            for (int x = 0; x < recordDelta->slotuse; x++) {
               if (key_equal(tmpkeys[x], recordDelta->key)) {
+                // remove value in the vector
+                (*tmpvals)[x]->erase( recordDelta->);
+
+                // if vector is empty, needed to be removed
+                if( (*tmpvals)[x]->size() == 0 ){
+                  need_remove = true;
+                }
                 target_pos = x;
                 break;
               }
             }
 
-            delete tmpvals[target_pos];
-            for (int x = target_pos; x < cur_delta->slotuse - 1; x++) {
-              tmpkeys[x] = tmpkeys[x + 1];
-              tmpvals[x] = tmpvals[x + 1];
+            if( need_remove ) {
+              delete tmpvals[target_pos];
+              for (int x = target_pos; x < cur_delta->slotuse - 1; x++) {
+                tmpkeys[x] = tmpkeys[x + 1];
+                tmpvals[x] = tmpvals[x + 1];
+              }
             }
 
           }
@@ -1013,8 +1027,6 @@ class BWTree {
     }
 
     return std::make_pair(tmpkeys, tmpvals);
-
-
 
   }
 

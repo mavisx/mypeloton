@@ -620,11 +620,6 @@ class BWTree {
 
   typedef std::unordered_set<ValueType,std::hash<ValueType>, ItemPointerEqualityChecker> DelSet;
 
-  inline bool key_is_in(KeyType key, Node* listhead) {
-    DelSet deleted_set;
-    return key_is_in(key, listhead, deleted_set);
-  };
-
   bool key_is_in(KeyType key, Node* listhead, DelSet& deleted) {
     if (listhead == nullptr) return false;
 
@@ -674,12 +669,10 @@ class BWTree {
 
   }
 
-  std::pair<int, int> count_pair(KeyType key, ValueType value, Node* listhead) {
-    int total_count = 0;
-    int pair_count = 0;
+
+  inline bool key_is_in(KeyType key, Node* listhead) {
     DelSet deleted_set;
-    count_pair(key, value, listhead, total_count, pair_count, deleted_set);
-    return std::pair<int, int>(total_count, pair_count);
+    return key_is_in(key, listhead, deleted_set);
   };
 
   //return pair nums, also calculates total val nums of the key in count
@@ -734,6 +727,14 @@ class BWTree {
         break;
     }
     count_pair(key, value, node->next, total_count, pair_count, deleted);
+  };
+
+  std::pair<int, int> count_pair(KeyType key, ValueType value, Node* listhead) {
+    int total_count = 0;
+    int pair_count = 0;
+    DelSet deleted_set;
+    count_pair(key, value, listhead, total_count, pair_count, deleted_set);
+    return std::pair<int, int>(total_count, pair_count);
   };
 
   bool append_delete( Node* basic_node, KeyType key, ValueType value, bool deletekey){
@@ -1065,11 +1066,11 @@ class BWTree {
     new_leaf->delta_list_len = 0;
     new_leaf->high_key = new_delta->high_key;
 
-    std::pair< KeyType*, std::vector<ValueType>** > arrays = fake_consolidate(new_delta);
+    std::pair< std::vector<KeyType>*, std::vector<std::vector<ValueType>*>* > arrays = fake_consolidate(new_delta);
 
     for (int i = leafslotmax / 2; i < leafslotmax; i++) {
-      new_leaf->slotkey[i - leafslotmax / 2] = arrays.first[i];
-      new_leaf->slotdata[i - leafslotmax / 2] = arrays.second[i];
+      new_leaf->slotkey[i - leafslotmax / 2] = arrays.first->at(i);
+      new_leaf->slotdata[i - leafslotmax / 2] = arrays.second->at(i);
     }
     new_leaf->low_key = new_leaf->slotkey[0];
     new_leaf->slotuse = (unsigned short)(leafslotmax / 2);

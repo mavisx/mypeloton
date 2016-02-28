@@ -716,27 +716,12 @@ class BWTree {
     count_pair(key, value, node->next, total_count, pair_count, deleted);
   };
 
-  bool append_delete(KeyType key, ValueType value) {
-    std::stack<PidType> path = search(BWTree::root, key);
-    if (path.empty()) {
-      LOG_ERROR("InsertEntry get empty tree");
-      return false;
-    }
-    PidType basic_pid = path.top();
-    path.pop();
-
-    Node* basic_node = mapping_table.get(basic_pid);
-    auto tv_count_pair = count_pair(key,value, basic_node);
-    if (!tv_count_pair.second) {
-      LOG_INFO("DeleteEntry Not Exist");
-      return false;
-    }
-
+  bool append_delete( Node* basic_node, KeyType key, ValueType value, bool deletekey){
 
     RecordDelta* new_delta = new RecordDelta(basic_node->pid, RecordDelta::DELETE, key, value,
                         mapping_table, basic_node->next_leafnode);
 
-    if(tv_count_pair.first <= tv_count_pair.second) {
+    if(deletekey) {
       new_delta->slotuse -= 1;
     }
 
@@ -908,15 +893,34 @@ class BWTree {
   }
 
   bool delete_entry(KeyType key, ValueType value) {
-    while (!append_delete(key, value)) {
-      LOG_INFO("delete_entry fail, retry...");
-    }
+    bool redo =true;
 
+    //check and insert delete delta
+    while(redo) {
+      std::stack<PidType> path = search(BWTree::root, key);
+      if (path.empty()) {
+        LOG_ERROR("InsertEntry get empty tree");
+        return false;
+      }
+      PidType basic_pid = path.top();
+      path.pop();
+
+      Node* basic_node = mapping_table.get(basic_pid);
+      auto tv_count_pair = count_pair(key,value, basic_node);
+      if (!tv_count_pair.second) {
+        LOG_INFO("DeleteEntry Not Exist");
+        return false;
+      }
+
+      bool deletekey = (tv_count_pair.second>=tv_count_pair.first);
+
+      redo = append_delete(basic_node, key, value, deletekey);
+    }
     // TODO:apend merge_delta
 
     // TODO:apend delete_index_term_delta
 
-    return false;
+    return !redo;
   };
 
   bool update_entry(KeyType key, ValueType value);

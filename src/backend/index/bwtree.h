@@ -676,7 +676,7 @@ class BWTree {
   };
 
   //return pair nums, also calculates total val nums of the key in count
-  int count_pair(KeyType key, Value value, Node* listhead,
+  int count_pair(KeyType key, ValueType value, Node* listhead,
                  int& total_count, int& pair_count, DelSet& deleted) {
     if (listhead == nullptr) return pair_count;
 
@@ -746,7 +746,12 @@ class BWTree {
       new_delta->slotuse -= 1;
     }
 
-    return mapping_table.set(basic_node->pid, basic_node, new_delta);
+    if(mapping_table.set(basic_node->pid, basic_node, new_delta) ){
+      return true;
+    } else {
+      delete new_delta;
+      return false;
+    };
   }
 
   bool apend_merge()

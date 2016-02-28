@@ -595,7 +595,7 @@ class BWTree {
   }
 
 
-  bool is_in(KeyType key, Node* listhead) {
+  bool key_is_in(KeyType key, Node* listhead) {
     if (listhead == nullptr) return false;
 
     Node* node = listhead;
@@ -609,7 +609,7 @@ class BWTree {
                    key_equal(rcd_node->key, key)) {
           return false;
         }
-        return is_in(key, node->next);
+        return key_is_in(key, node->next);
       case LEAF:
         LeafNode* lf_node = (LeafNode*)node;
         for (int i = 0; i < (lf_node->slotuse); i++) {
@@ -621,22 +621,22 @@ class BWTree {
       case MERGE_DELTA:
         if (key_greaterequal(key, ((MergeDelta*)node)->Kp)) {
           node = ((MergeDelta*)node)->orignal_node;
-          return is_in(key, node);
+          return key_is_in(key, node);
         }
-        return is_in(key, node->next);
+        return key_is_in(key, node->next);
 
       case SPLIT_DELTA:
         if (key_greaterequal(key, ((SplitDelta*)node)->Kp)) {
           PidType pid = ((SplitDelta*)node)->pQ;
-          return is_in(key, mapping_table.get(pid));
+          return key_is_in(key, mapping_table.get(pid));
         }
-        return is_in(key, node->next);
+        return key_is_in(key, node->next);
       default:
         return false;
     }
   };
 
-  int count_pair(KeyType key, Value value, Node* listhead, int &count) {
+  bool pair_is_in(KeyType key, Value value, Node* listhead, int &count) {
     if (listhead == nullptr) return count;
 
     Node* node = listhead;
@@ -667,18 +667,18 @@ class BWTree {
       case MERGE_DELTA:
         if (key_greaterequal(key, ((MergeDelta*)node)->Kp)) {
           node = ((MergeDelta*)node)->Kp;
-          return count_pair(key, value, node, count);
+          return pair_is_in(key, value, node, count);
         }
         break;
 
       case SPLIT_DELTA:
         if (key_greaterequal(key, ((SplitDelta*)node)->Kp)) {
           PidType pid = ((SplitDelta*)node)->pQ;
-          return count_pair(key, value, mapping_table.get(pid), count);
+          return pair_is_in(key, value, mapping_table.get(pid), count);
         }
         break;
     }
-    return count_pair(key, value, node->next, count);
+    return pair_is_in(key, value, node->next, count);
   };
 
   bool append_delete( Node* basic_node, KeyType key, ValueType value, int count) {

@@ -700,13 +700,9 @@ class BWTree {
     }
 
     RecordDelta* new_delta =
-<<<<<<< HEAD
-        new RecordDelta(basic_pid, RecordDelta::DELETE, key, value, mapping_table,
-                        basic_node->prev_node, basic_node->next_node);
-=======
         new RecordDelta(basic_node->pid, RecordDelta::DELETE, key, value,
                         mapping_table, basic_node->next_leafnode);
->>>>>>> 92c361d022bc138f8231d2a23b8d848d31809292
+
     new_delta->slotuse -= count;
 
     return mapping_table.set(basic_node->pid, basic_node, new_delta);
@@ -865,13 +861,10 @@ class BWTree {
     new_delta->high_key = basic_node->high_key;
     new_delta->low_key = basic_node->low_key;
 
-<<<<<<< HEAD
-=======
     //TODO: use CAS concatenate this new_delta to the delta chain
     if ( !mapping_table.set(basic_pid, new_delta, basic_node) ){
       return false;
     }
->>>>>>> 92c361d022bc138f8231d2a23b8d848d31809292
 
     return true;
   }

@@ -883,7 +883,7 @@ class BWTree {
 
   bool update_entry(KeyType key, ValueType value);
 
-  std::pair<  KeyType*, std::vector<ValueType>** > fake_consolidate( Node* new_delta) {
+  std::pair< std::vector<KeyType>*, std::vector<std::vector<ValueType>*>* > fake_consolidate( Node* new_delta) {
 
     std::stack<Node*> delta_chain;
     Node* tmp_cur_node = new_delta;
@@ -978,8 +978,6 @@ class BWTree {
     }
 
     return std::make_pair(tmpkeys, tmpvals);
-
-
 
   }
 

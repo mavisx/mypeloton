@@ -35,6 +35,8 @@
 #define GET_TIER1_INDEX(pid) ((pid) >> 10)
 #define GET_TIER2_INDEX(pid) ((pid)&0x3ff)
 
+#define NULL_PID -1
+
 namespace peloton {
 namespace index {
 
@@ -228,12 +230,12 @@ class BWTree {
     PidType next_leafnode;
 
       // constructor
-    Node(NodeType n, size_t delta_l, MappingTable& mt, PidType next) : mapping_table(mt) {
+    Node(NodeType n, size_t delta_l, MappingTable& mt, PidType next_leaf) : mapping_table(mt) {
       node_type = n;
       slotuse = 0;
       next = nullptr;
       delta_list_len = delta_l;
-      next_leafnode = next;
+      next_leafnode = next_leaf;
     }
 
     // True if this is a leaf node
@@ -273,7 +275,7 @@ class BWTree {
 
     /// Set variables to initial values
     InnerNode(MappingTable& mapping_table, PidType next_leafnode)
-        : Node(NodeType::INNER, 0, mapping_table, next_leafnode ) {}
+        : Node(NodeType::INNER, 0, mapping_table, next_leafnode) {}
 
     /// True if the node's slots are full
     inline bool isfull() const { return (Node::slotuse == innerslotmax); }
@@ -594,6 +596,48 @@ class BWTree {
     }
   }
 
+
+  bool is_in(KeyType key, Node* listhead) {
+    if (listhead == nullptr) return false;
+
+    Node* node = listhead;
+    switch (node->node_type) {
+      case RECORD_DELTA:
+        RecordDelta* rcd_node = (RecordDelta*)node;
+        if (rcd_node->op_type == RecordDelta::INSERT &&
+            key_equal(rcd_node->key, key)) {
+          return true;
+        } else if (rcd_node->op_type == RecordDelta::DELETE &&
+                   key_equal(rcd_node->key, key)) {
+          return false;
+        }
+        return is_in(key, node->next);
+      case LEAF:
+        LeafNode* lf_node = (LeafNode*)node;
+        for (int i = 0; i < (lf_node->slotuse); i++) {
+          if (key_equal(lf_node->slotkey[i], key)) {
+            return true;
+          }
+        }
+        return false;
+      case MERGE_DELTA:
+        if (key_greaterequal(key, ((MergeDelta*)node)->Kp)) {
+          node = ((MergeDelta*)node)->orignal_node;
+          return is_in(key, node);
+        }
+        return is_in(key, node->next);
+
+      case SPLIT_DELTA:
+        if (key_greaterequal(key, ((SplitDelta*)node)->Kp)) {
+          PidType pid = ((SplitDelta*)node)->pQ;
+          return is_in(key, mapping_table.get(pid));
+        }
+        return is_in(key, node->next);
+      default:
+        return false;
+    }
+  };
+
   int count_pair(KeyType key, Value value, Node* listhead, int &count) {
     if (listhead == nullptr) return count;
 
@@ -639,13 +683,33 @@ class BWTree {
     return count_pair(key, value, node->next, count);
   };
 
-  bool append_delete( Node* basic_node, KeyType key, ValueType value, int count) {
+  bool append_delete(KeyType key, ValueType value) {
+    int count = 0;
+    std::stack<PidType> path = search(BWTree::root, key);
+    if (path.empty()) {
+      LOG_ERROR("InsertEntry get empty tree");
+      return false;
+    }
+    PidType basic_pid = path.top();
+    path.pop();
+
+    Node* basic_node = mapping_table.get(basic_pid);
+    if (!count_pair(key,value, basic_node,count)) {
+      LOG_INFO("DeleteEntry Not Exist");
+      return false;
+    }
+
     RecordDelta* new_delta =
+<<<<<<< HEAD
+        new RecordDelta(basic_pid, RecordDelta::DELETE, key, value, mapping_table,
+                        basic_node->prev_node, basic_node->next_node);
+=======
         new RecordDelta(basic_node->pid, RecordDelta::DELETE, key, value,
                         mapping_table, basic_node->next_leafnode);
+>>>>>>> 92c361d022bc138f8231d2a23b8d848d31809292
     new_delta->slotuse -= count;
 
-    return mapping_table.set(basic_node->pid, new_delta);
+    return mapping_table.set(basic_node->pid, basic_node, new_delta);
   }
 
   bool apend_merge()
@@ -801,46 +865,27 @@ class BWTree {
     new_delta->high_key = basic_node->high_key;
     new_delta->low_key = basic_node->low_key;
 
+<<<<<<< HEAD
+=======
     //TODO: use CAS concatenate this new_delta to the delta chain
     if ( !mapping_table.set(basic_pid, new_delta, basic_node) ){
       return false;
     }
+>>>>>>> 92c361d022bc138f8231d2a23b8d848d31809292
 
     return true;
   }
 
   bool delete_entry(KeyType key, ValueType value) {
-    bool redo =true;
-
-    //check and insert delete delta
-    while(redo) {
-      int count = 0;
-      std::stack<PidType> path = search(BWTree::root, key);
-
-      if (path.empty()) {
-        LOG_ERROR("InsertEntry get empty tree");
-        return false;
-      }
-
-      PidType basic_pid = path.top();
-      path.pop();
-
-      Node* basic_node = mapping_table.get(basic_pid);
-      if (!count_pair(key,value, basic_node,count)) {
-        LOG_INFO("DeleteEntry Not Exist");
-        return false;
-      }
-
-      redo = append_delete(basic_node, key, value, count);
+    while (!append_delete(key, value)) {
+      LOG_INFO("delete_entry fail, retry...");
     }
-
-
 
     // TODO:apend merge_delta
 
     // TODO:apend delete_index_term_delta
 
-    return !redo;
+    return false;
   };
 
   bool update_entry(KeyType key, ValueType value);
@@ -954,7 +999,7 @@ class BWTree {
 
     std::pair< KeyType*, std::vector<ValueType>** > arrays = fake_consolidate(new_delta);
 
-    for (int i = leafslotmax / 2; i < leafslotmax; i++) {  wrong
+    for (int i = leafslotmax / 2; i < leafslotmax; i++) {
       new_leaf->slotkey[i - leafslotmax / 2] = arrays.first[i];
       new_leaf->slotdata[i - leafslotmax / 2] = arrays.second[i];
     }
@@ -971,8 +1016,17 @@ class BWTree {
   }
   // interfaces of SCAN to be added -mavis
 
-  void scan_all(std::vector<ValueType>& vector) {
+  void scan_all(std::vector<ValueType>& v) {
+    Node * node = mapping_table.get(headleaf);
 
+    // scan the leaf nodes list from begin to the end
+    while (node != nullptr) {
+      auto all_key_value_pair =  fake_consolidate(node);
+
+      v.insert(v.end(), all_key_value_pair.second.begin(), all_key_value_pair.second.end());
+
+      node = mapping_table.get(node->next_node);
+    }
   }
 
 };

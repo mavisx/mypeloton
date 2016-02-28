@@ -594,6 +594,48 @@ class BWTree {
     }
   }
 
+
+  bool is_in(KeyType key, Node* listhead) {
+    if (listhead == nullptr) return false;
+
+    Node* node = listhead;
+    switch (node->node_type) {
+      case RECORD_DELTA:
+        RecordDelta* rcd_node = (RecordDelta*)node;
+        if (rcd_node->op_type == RecordDelta::INSERT &&
+            key_equal(rcd_node->key, key)) {
+          return true;
+        } else if (rcd_node->op_type == RecordDelta::DELETE &&
+                   key_equal(rcd_node->key, key)) {
+          return false;
+        }
+        return is_in(key, node->next);
+      case LEAF:
+        LeafNode* lf_node = (LeafNode*)node;
+        for (int i = 0; i < (lf_node->slotuse); i++) {
+          if (key_equal(lf_node->slotkey[i], key)) {
+            return true;
+          }
+        }
+        return false;
+      case MERGE_DELTA:
+        if (key_greaterequal(key, ((MergeDelta*)node)->Kp)) {
+          node = ((MergeDelta*)node)->orignal_node;
+          return is_in(key, node);
+        }
+        return is_in(key, node->next);
+
+      case SPLIT_DELTA:
+        if (key_greaterequal(key, ((SplitDelta*)node)->Kp)) {
+          PidType pid = ((SplitDelta*)node)->pQ;
+          return is_in(key, mapping_table.get(pid));
+        }
+        return is_in(key, node->next);
+      default:
+        return false;
+    }
+  };
+
   int count_pair(KeyType key, Value value, Node* listhead, int &count) {
     if (listhead == nullptr) return count;
 
@@ -646,7 +688,7 @@ class BWTree {
                         basic_node->next_node);
     new_delta->slotuse -= count;
 
-    return mapping_table.set(basic_node->pid, new_delta);
+    return mapping_table.set(basic_node->pid, basic_node, new_delta);
   }
 
   bool apend_merge()

@@ -18,6 +18,7 @@
 #include <unordered_map>
 #include <stack>
 #include <vector>
+#include <unordered_set>
 #include "../common/types.h"
 #include "../storage/tuple.h"
 
@@ -597,49 +598,15 @@ class BWTree {
   }
 
 
-  bool key_is_in(KeyType key, Node* listhead) {
-    if (listhead == nullptr) return false;
+  typedef std::unordered_set<ValueType,std::hash<ValueType>, m_value_equal> DelSet;
 
-    Node* node = listhead;
-    switch (node->node_type) {
-      case RECORD_DELTA:
-        RecordDelta* rcd_node = (RecordDelta*)node;
-        if (rcd_node->op_type == RecordDelta::INSERT &&
-            key_equal(rcd_node->key, key)) {
-          return true;
-        } else if (rcd_node->op_type == RecordDelta::DELETE &&
-                   key_equal(rcd_node->key, key)) {
-          return false;
-        }
-        return key_is_in(key, node->next);
-      case LEAF:
-        LeafNode* lf_node = (LeafNode*)node;
-        for (int i = 0; i < (lf_node->slotuse); i++) {
-          if (key_equal(lf_node->slotkey[i], key)) {
-            return true;
-          }
-        }
-        return false;
-      case MERGE_DELTA:
-        if (key_greaterequal(key, ((MergeDelta*)node)->Kp)) {
-          node = ((MergeDelta*)node)->orignal_node;
-          return key_is_in(key, node);
-        }
-        return key_is_in(key, node->next);
-
-      case SPLIT_DELTA:
-        if (key_greaterequal(key, ((SplitDelta*)node)->Kp)) {
-          PidType pid = ((SplitDelta*)node)->pQ;
-          return key_is_in(key, mapping_table.get(pid));
-        }
-        return key_is_in(key, node->next);
-      default:
-        return false;
-    }
+  inline bool key_is_in(KeyType key, Node* listhead) {
+    DelSet deleted_set;
+    return key_is_in(key, listhead, deleted_set);
   };
 
-  bool pair_is_in(KeyType key, Value value, Node* listhead, int &count) {
-    if (listhead == nullptr) return count;
+  bool key_is_in(KeyType key, Node* listhead, DelSet& deleted) {
+    if (listhead == nullptr) return false;
 
     Node* node = listhead;
     switch (node->node_type) {
@@ -647,11 +614,74 @@ class BWTree {
         RecordDelta* rcd_node = (RecordDelta*)node;
         if (rcd_node->op_type == RecordDelta::INSERT
             && key_equal(rcd_node->key, key)
-            && value_equal(rcd_node->value, value)) {
-          count++;
-        } else if (rcd_node->op_type == RecordDelta::DELETE &&
+            && (!deleted.count(rcd_node->value))) {
+          return true;
+        }
+        else if (rcd_node->op_type == RecordDelta::DELETE
+                 && key_equal(rcd_node->key, key)) {
+          deleted.insert(rcd_node->value);
+        }
+        return key_is_in(key, node->next, deleted);
+      case LEAF:
+        LeafNode* lf_node = (LeafNode*)node;
+        for (int i = 0; i < (lf_node->slotuse); i++) {
+          if (key_equal(lf_node->slotkey[i], key)) {
+            for(auto val:(*lf_node->slotdata[i])){
+              if(!deleted.count(val)) {
+                return true;
+              }
+            }
+            return false;
+          }
+        }
+        return false;
+      case MERGE_DELTA:
+        if (key_greaterequal(key, ((MergeDelta*)node)->Kp)) {
+          node = ((MergeDelta*)node)->orignal_node;
+          return key_is_in(key, node, deleted);
+        }
+        return key_is_in(key, node->next, deleted);
+
+      case SPLIT_DELTA:
+        if (key_greaterequal(key, ((SplitDelta*)node)->Kp)) {
+          PidType pid = ((SplitDelta*)node)->pQ;
+          return key_is_in(key, mapping_table.get(pid), deleted);
+        }
+        return key_is_in(key, node->next, deleted);
+      default:
+        return false;
+    }
+
+  }
+
+  std::pair<int, int> count_pair(KeyType key, Value value, Node* listhead) {
+    int total_count = 0;
+    int pair_count = 0;
+    DelSet deleted_set;
+    count_pair(key, value, listhead, total_count, pair_count, deleted_set);
+    return std::pair<int, int>(total_count, pair_count);
+  };
+
+  //return pair nums, also calculates total val nums of the key in count
+  int count_pair(KeyType key, Value value, Node* listhead,
+                 int& total_count, int& pair_count, DelSet& deleted) {
+    if (listhead == nullptr) return pair_count;
+
+    Node* node = listhead;
+    switch (node->node_type) {
+      case RECORD_DELTA:
+        RecordDelta* rcd_node = (RecordDelta*)node;
+        if (rcd_node->op_type == RecordDelta::INSERT
+            && key_equal(rcd_node->key, key)
+            && (!deleted.count(rcd_node->value))) {
+          total_count++;
+          if(value_equal(rcd_node->value, value)) {
+            pair_count++;
+          }
+        }
+        else if (rcd_node->op_type == RecordDelta::DELETE &&
                    key_equal(rcd_node->key, key)) {
-          return count;
+          deleted.insert(rcd_node->value);
         }
         break;
       case LEAF:
@@ -659,32 +689,34 @@ class BWTree {
         for (int i = 0; i < (lf_node->slotuse); i++) {
           if (key_equal(lf_node->slotkey[i], key)) {
             for (ValueType v: *(lf_node->slotdata[i])){
+              if(deleted.count(v)) continue;
+              total_count++;
               if(value_equal(v, value))
-                count++;
+                pair_count++;
             }
             break;
           }
         }
-        return count;
+        return pair_count;
       case MERGE_DELTA:
         if (key_greaterequal(key, ((MergeDelta*)node)->Kp)) {
           node = ((MergeDelta*)node)->Kp;
-          return pair_is_in(key, value, node, count);
+          return count_pair(key, value, node, total_count, pair_count, deleted);
         }
         break;
 
       case SPLIT_DELTA:
         if (key_greaterequal(key, ((SplitDelta*)node)->Kp)) {
           PidType pid = ((SplitDelta*)node)->pQ;
-          return pair_is_in(key, value, mapping_table.get(pid), count);
+          return count_pair(key, value, mapping_table.get(pid),
+                            total_count, pair_count, deleted);
         }
         break;
     }
-    return pair_is_in(key, value, node->next, count);
+    count_pair(key, value, node->next, total_count, pair_count, deleted);
   };
 
   bool append_delete(KeyType key, ValueType value) {
-    int count = 0;
     std::stack<PidType> path = search(BWTree::root, key);
     if (path.empty()) {
       LOG_ERROR("InsertEntry get empty tree");
@@ -694,7 +726,8 @@ class BWTree {
     path.pop();
 
     Node* basic_node = mapping_table.get(basic_pid);
-    if (!count_pair(key,value, basic_node,count)) {
+    auto tv_count_pair = count_pair(key,value, basic_node);
+    if (!tv_count_pair.second) {
       LOG_INFO("DeleteEntry Not Exist");
       return false;
     }
@@ -703,7 +736,9 @@ class BWTree {
     RecordDelta* new_delta = new RecordDelta(basic_node->pid, RecordDelta::DELETE, key, value,
                         mapping_table, basic_node->next_leafnode);
 
-    new_delta->slotuse -= count;
+    if(tv_count_pair.first <= tv_count_pair.second) {
+      new_delta->slotuse -= 1;
+    }
 
     return mapping_table.set(basic_node->pid, basic_node, new_delta);
   }

@@ -35,6 +35,8 @@
 #define GET_TIER1_INDEX(pid) ((pid) >> 10)
 #define GET_TIER2_INDEX(pid) ((pid)&0x3ff)
 
+#define NULL_PID -1
+
 namespace peloton {
 namespace index {
 
@@ -639,11 +641,25 @@ class BWTree {
     return count_pair(key, value, node->next, count);
   };
 
-  bool append_delete( Node* basic_node, KeyType key, ValueType value, int count) {
+  bool append_delete(KeyType key, ValueType value) {
+    int count = 0;
+    std::stack<PidType> path = search(BWTree::root, key);
+    if (path.empty()) {
+      LOG_ERROR("InsertEntry get empty tree");
+      return false;
+    }
+    PidType basic_pid = path.top();
+    path.pop();
+
+    Node* basic_node = mapping_table.get(basic_pid);
+    if (!count_pair(key,value, basic_node,count)) {
+      LOG_INFO("DeleteEntry Not Exist");
+      return false;
+    }
+
     RecordDelta* new_delta =
-        new RecordDelta(basic_node->pid, RecordDelta::DELETE, key, value,
-                        mapping_table, basic_node->prev_node,
-                        basic_node->next_node);
+        new RecordDelta(basic_pid, RecordDelta::DELETE, key, value, mapping_table,
+                        basic_node->prev_node, basic_node->next_node);
     new_delta->slotuse -= count;
 
     return mapping_table.set(basic_node->pid, new_delta);
@@ -794,44 +810,20 @@ class BWTree {
     new_delta->high_key = basic_node->high_key;
     new_delta->low_key = basic_node->low_key;
 
-    //TODO: use CAS concatenate this new_delta to the delta chain
-    mapping_table.set()
 
     return true;
   }
 
   bool delete_entry(KeyType key, ValueType value) {
-    bool redo =true;
-
-    //check and insert delete delta
-    while(redo) {
-      int count = 0;
-      std::stack<PidType> path = search(BWTree::root, key);
-
-      if (path.empty()) {
-        LOG_ERROR("InsertEntry get empty tree");
-        return false;
-      }
-
-      PidType basic_pid = path.top();
-      path.pop();
-
-      Node* basic_node = mapping_table.get(basic_pid);
-      if (!count_pair(key,value, basic_node,count)) {
-        LOG_INFO("DeleteEntry Not Exist");
-        return false;
-      }
-
-      redo = append_delete(basic_node, key, value, count);
+    while (!append_delete(key, value)) {
+      LOG_INFO("delete_entry fail, retry...");
     }
-
-
 
     // TODO:apend merge_delta
 
     // TODO:apend delete_index_term_delta
 
-    return !redo;
+    return false;
   };
 
   bool update_entry(KeyType key, ValueType value);
@@ -912,12 +904,12 @@ class BWTree {
               }
             }
 
-            delete tmpvals[target_pos];???
+            delete tmpvals[target_pos];
             for (int x = target_pos; x < cur_delta->slotuse - 1; x++) {
               tmpkeys[x] = tmpkeys[x + 1];
               tmpvals[x] = tmpvals[x + 1];
             }
-//                delete tmpvals[cur_delta->slotuse - 1];???
+
 
           }
           break;
@@ -945,7 +937,7 @@ class BWTree {
 
     std::pair< KeyType*, std::vector<ValueType>** > arrays = fake_consolidate(new_delta);
 
-    for (int i = leafslotmax / 2; i < leafslotmax; i++) {  wrong!!
+    for (int i = leafslotmax / 2; i < leafslotmax; i++) {
       new_leaf->slotkey[i - leafslotmax / 2] = arrays.first[i];
       new_leaf->slotdata[i - leafslotmax / 2] = arrays.second[i];
     }
@@ -962,8 +954,17 @@ class BWTree {
   }
   // interfaces of SCAN to be added -mavis
 
-  void scan_all(std::vector<ValueType>& vector) {
+  void scan_all(std::vector<ValueType>& v) {
+    Node * node = mapping_table.get(headleaf);
 
+    // scan the leaf nodes list from begin to the end
+    while (node != nullptr) {
+      auto all_key_value_pair =  fake_consolidate(node);
+
+      v.insert(v.end(), all_key_value_pair.second.begin(), all_key_value_pair.second.end());
+
+      node = mapping_table.get(node->next_node);
+    }
   }
 
 };

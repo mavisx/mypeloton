@@ -764,7 +764,12 @@ class BWTree {
       new_delta->slotuse -= 1;
     }
 
-    return mapping_table.set(basic_node->pid, basic_node, new_delta);
+    if(mapping_table.set(basic_node->pid, basic_node, new_delta) ){
+      return true;
+    } else {
+      delete new_delta;
+      return false;
+    };
   }
 
   bool apend_merge()

@@ -10,6 +10,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include <backend/index/bwtree_index.h>
 #include "gtest/gtest.h"
 #include "harness.h"
 
@@ -90,10 +91,11 @@ TEST(IndexTests, BasicTest) {
   key0->SetValue(1, ValueFactory::GetStringValue("a"), pool);
 
   // INSERT
-  LOG_INFO("I am going to insert");
   index->InsertEntry(key0.get(), item0);
 
   locations = index->ScanKey(key0.get());
+
+  LOG_INFO("Search1 result: size - %lu, loc[0].block: %llu", locations.size(), locations[0].block);
   EXPECT_EQ(locations.size(), 1);
   EXPECT_EQ(locations[0].block, item0.block);
 
@@ -101,6 +103,8 @@ TEST(IndexTests, BasicTest) {
   index->DeleteEntry(key0.get(), item0);
 
   locations = index->ScanKey(key0.get());
+  LOG_INFO("Search2 result: size - %lu", locations.size());
+
   EXPECT_EQ(locations.size(), 0);
 
   delete tuple_schema;

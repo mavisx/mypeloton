@@ -146,7 +146,9 @@ class BWTree {
       return mappingtable_1[tier1_idx][tier2_idx];
     }
 
-    bool set(PidType pid, Node* addr, Node* expected) {
+    bool set(PidType pid, Node* expected, Node* addr) {
+      addr->pid = pid;
+
       long tier1_idx = GET_TIER1_INDEX(pid);
       long tier2_idx = GET_TIER2_INDEX(pid);
 
@@ -165,6 +167,9 @@ class BWTree {
     // else return -1
     long add(Node* addr) {
       unsigned long new_pid = nextPid++;
+
+      addr->pid = new_pid;
+
       long tier1_idx = GET_TIER1_INDEX(new_pid);
       long tier2_idx = GET_TIER2_INDEX(new_pid);
 
@@ -446,7 +451,6 @@ class BWTree {
       // initialize the root, head and tail pid.
       root = newpid;
       headleaf = tailleaf = newpid;
-      addr->pid = newpid;
     } else {
       LOG_ERROR("Can't create the initial leafNode!");
     }
@@ -529,11 +533,12 @@ class BWTree {
       case LEAF:
       case RECORD_DELTA:
         if (node->node_type == LEAF) {
-          LOG_INFO("Search Range Info: meet a leaf, pid: %d, slotuse %d",
+          LOG_INFO("Search Range Info: meet a leaf, pid: %lld, slotuse %d",
                    node->pid, node->slotuse );
         }
         else {
-          LOG_INFO("Search Range Info: meet a record");
+          LOG_INFO("Search Range Info: meet a record, pid: %lld, slotuse %d",
+                   node->pid, node->slotuse );
         }
 
         return node->pid;
@@ -814,6 +819,8 @@ class BWTree {
     PidType target_node = path.top();
     Node * next = mapping_table.get(target_node);
 
+    LOG_INFO("Search result: pid - %lld, slotuse: %d", next->pid, next->slotuse);
+
 //    if (!next->is_leaf) {
 //      LOG_ERROR("get_value's search result is not a leaf");
 //      return;
@@ -909,7 +916,7 @@ class BWTree {
 //      new_split = new SplitDelta(basic_node, pivotal,
 //                                             new_leaf_pid, mapping_table, new_leaf_pid);
 //
-//      if ( !mapping_table.set(basic_pid, new_split, basic_node)) {
+//      if ( !mapping_table.set(basic_pid, basic_node, new_split)) {
 //        //TODO: if the CAS fails, release the new_split obj
 //        delete new_split;
 //      }
@@ -918,6 +925,9 @@ class BWTree {
 
     RecordDelta* new_delta = new RecordDelta(basic_pid, RecordDelta::INSERT,
                                              key, value, mapping_table, basic_node->next_leafnode);
+
+    new_delta->pid = basic_pid;
+
     if( !key_is_in(key, new_delta->next) )
       new_delta->slotuse = new_delta->next->slotuse+1;
 
@@ -932,7 +942,7 @@ class BWTree {
     new_delta->low_key = basic_node->low_key;
 
     //TODO: use CAS concatenate this new_delta to the delta chain
-    if ( !mapping_table.set(basic_pid, new_delta, basic_node) ){
+    if ( !mapping_table.set(basic_pid, basic_node, new_delta) ){
       delete new_delta;
       return false;
     }
@@ -945,7 +955,7 @@ class BWTree {
 
     //check and insert delete delta
     while(redo) {
-      std::stack<PidType> path = search(BWTree::root, key);
+      std::stack<PidType> path = search(root, key);
       if (path.empty()) {
         LOG_ERROR("InsertEntry get empty tree");
         return false;
@@ -967,6 +977,8 @@ class BWTree {
     // TODO:apend merge_delta
 
     // TODO:apend delete_index_term_delta
+
+    print_info(root);
 
     return !redo;
   };
@@ -1139,6 +1151,13 @@ class BWTree {
 
       node = mapping_table.get(node->next_leafnode);
     }
+  }
+
+  void print_info(PidType pid) {
+    Node * node = mapping_table.get(pid);
+
+    LOG_INFO("pid - %lld, delta_chain_len: %ld, slotuse: %d",
+             pid, node->delta_list_len, node->slotuse);
   }
 
 };

@@ -74,9 +74,11 @@ bool BWTreeIndex<KeyType, ValueType, KeyComparator,
                                                   const storage::Tuple *key,
                                                   __attribute__((unused))
                                                   const ItemPointer location) {
+  LOG_INFO("Entering DeleteEntry");
   KeyType index_key;
   index_key.SetFromKey(key);
 
+  LOG_INFO("Leaving DeleteEntry");
   return container.delete_entry(index_key, location);
 }
 

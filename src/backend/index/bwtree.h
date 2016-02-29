@@ -933,6 +933,7 @@ class BWTree {
 
     //TODO: use CAS concatenate this new_delta to the delta chain
     if ( !mapping_table.set(basic_pid, new_delta, basic_node) ){
+      delete new_delta;
       return false;
     }
 

@@ -845,6 +845,7 @@ class BWTree {
           }
           next = node->next;
         }
+          break;
         case LEAF: {
           LeafNode * leaf = static_cast<LeafNode *>(next);
           for (int i=0; i < leaf->slotuse; i++) {
@@ -858,6 +859,7 @@ class BWTree {
           }
           next = nullptr;
         }
+          break;
         case SPLIT_DELTA: {
           SplitDelta *split_delta = static_cast<SplitDelta *>(next);
           // if key >= Kp, we go to the new split node
@@ -870,6 +872,7 @@ class BWTree {
             next = split_delta->next;
           }
         }
+          break;
         case MERGE_DELTA: {
           MergeDelta *merge_delta = static_cast<MergeDelta *>(next);
           // if key >= Kp, we go to the original node
@@ -881,10 +884,12 @@ class BWTree {
             next = merge_delta->next;
           }
         }
+          break;
         case REMOVE_NODE_DELTA:
           // if we meet remove node delta, we can search from the root again.
           result.clear();
           get_value(key, result);
+          break;
         default:
           LOG_ERROR("meet wrong delta: %d during get_value", next->node_type);
       }

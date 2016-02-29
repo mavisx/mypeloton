@@ -759,7 +759,7 @@ class BWTree {
     }
 
     return std::pair<int, int>(total_count, pair_count);
-  };
+  }
 
   bool append_delete( Node* basic_node, KeyType key, ValueType value, bool deletekey){
 
@@ -964,8 +964,7 @@ class BWTree {
       std::stack<PidType> path = search(root, key);
       if (path.empty()) {
         LOG_ERROR("InsertEntry get empty tree");
-        retrui
-        urn false;
+        return false;
       }
       PidType basic_pid = path.top();
       path.pop();

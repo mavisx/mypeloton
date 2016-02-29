@@ -262,6 +262,10 @@ class BWTree {
       next_leafnode = next_leaf;
     }
 
+    ~Node() {
+
+    }
+
     // True if this is a leaf node
     inline bool is_leaf_node() const { return (node_type == NodeType::LEAF); }
 
@@ -334,6 +338,13 @@ class BWTree {
       }
     }
 
+    ~LeafNode(){
+      for (int i = 0; i < leafslotmax + 1; i++) {
+        if(slotdata[i] != nullptr)
+          delete slotdata[i];
+      }
+    }
+
     /// True if the node's slots are full
     inline bool isfull() const { return (Node::slotuse == leafslotmax); }
 
@@ -377,12 +388,6 @@ class BWTree {
       Node* orig_node = mapping_table.get(next);
 
       prepend(this, orig_node);
-
-      // update the slotuse of the new delta node
-      /* if (op_type == INSERT) {
-         if( !key_is_in(k, orig_node) )
-           this->slotuse = (unsigned short)(orig_node->slotuse + 1);
-       }*/
 
       this->value = v;
     }
@@ -464,7 +469,10 @@ class BWTree {
   }
 
   // destructor
-  ~BWTree(){};
+  ~BWTree(){
+    delete_chain(mapping_table.get(root));
+    mapping_table.~MappingTable();
+  };
 
   /*
    ************************************************
@@ -511,6 +519,17 @@ class BWTree {
   KeyEqualityChecker m_key_equal;
   ItemPointerEqualityChecker m_value_equal;
   peloton::index::IndexMetadata* m_metadata;
+
+  bool delete_chain(Node* node) {
+    Node* next = node;
+    while(next){
+      node = next;
+      next = node->next;
+      delete node;
+    }
+    return ture;
+  }
+
 
   std::stack<PidType> search(PidType pid, KeyType key) {
     auto node = mapping_table.get(pid);
@@ -1028,6 +1047,7 @@ class BWTree {
 
     std::vector<std::vector<ValueType>> tmpvals;
 
+    //TODO: move the leaf-node branch inside switch and add inner-node branch.
     // the first node must be the original leaf node itself
     assert(delta_chain.top()->node_type == LEAF);
 

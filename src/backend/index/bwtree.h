@@ -262,9 +262,7 @@ class BWTree {
       next_leafnode = next_leaf;
     }
 
-    ~Node() {
-
-    }
+    ~Node() {}
 
     // True if this is a leaf node
     inline bool is_leaf_node() const { return (node_type == NodeType::LEAF); }
@@ -338,10 +336,9 @@ class BWTree {
       }
     }
 
-    ~LeafNode(){
+    ~LeafNode() {
       for (int i = 0; i < leafslotmax + 1; i++) {
-        if(slotdata[i] != nullptr)
-          delete slotdata[i];
+        if (slotdata[i] != nullptr) delete slotdata[i];
       }
     }
 
@@ -469,7 +466,7 @@ class BWTree {
   }
 
   // destructor
-  ~BWTree(){
+  ~BWTree() {
     delete_chain(mapping_table.get(root));
     mapping_table.~MappingTable();
   };
@@ -522,10 +519,10 @@ class BWTree {
 
   bool delete_chain(Node* node) {
     Node* next = node;
-    while(next){
+    while (next) {
       node = next;
-      if(node->node_type == MERGE_DELTA){
-        PidType temp = ((MergeDelta*)node) -> orignal_node->pid;
+      if (node->node_type == MERGE_DELTA) {
+        PidType temp = ((MergeDelta*)node)->orignal_node->pid;
         delete_chain(mapping_table.get(temp));
       }
       next = node->next;
@@ -533,7 +530,6 @@ class BWTree {
     }
     return true;
   }
-
 
   std::stack<PidType> search(PidType pid, KeyType key) {
     auto node = mapping_table.get(pid);
@@ -966,15 +962,11 @@ class BWTree {
       redo = false;
     }
 
-
-
     redo = true;
     while (redo) {
-
 #ifdef DISALLOW_DUPLICATION
       auto count_res = count_pair(key, value, basic_node);
-      if (count_res.second > 0)
-        return false;
+      if (count_res.second > 0) return false;
 #endif
 
       RecordDelta* new_delta =
@@ -1053,7 +1045,7 @@ class BWTree {
 
     std::vector<std::vector<ValueType>> tmpvals;
 
-    //TODO: move the leaf-node branch inside switch and add inner-node branch.
+    // TODO: move the leaf-node branch inside switch and add inner-node branch.
     // the first node must be the original leaf node itself
     assert(delta_chain.top()->node_type == LEAF);
 

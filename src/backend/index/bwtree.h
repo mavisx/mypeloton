@@ -996,12 +996,12 @@ class BWTree {
 
     // copy the data in the base node
     for (int i = 0; i < orig_leaf_node->slotuse; i++) {
-      tmpkeys.push_back(orig_leaf_node->slotkey[i]);
-      tmpvals.push_back(new std::vector<ValueType>(*(orig_leaf_node->slotdata[i])));
+
     }
 
     // traverse the delta chain
-    while (!delta_chain.empty()) {
+    while (!delta_chain.empty()) {  tmpkeys.push_back(orig_leaf_node->slotkey[i]);
+      tmpvals.push_back(new std::vector<ValueType>(*(orig_leaf_node->slotdata[i])));
       // get top delta node
       Node* cur_delta = delta_chain.top();
       delta_chain.pop();

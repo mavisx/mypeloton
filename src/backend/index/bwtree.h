@@ -693,70 +693,71 @@ class BWTree {
   };
 
   //return pair nums, also calculates total val nums of the key in count
-  int count_pair(KeyType key, ValueType value, Node* listhead,
-                 int& total_count, int& pair_count, DelSet& deleted) {
-    if (listhead == nullptr) return pair_count;
-
-    Node* node = listhead;
-    switch (node->node_type) {
-      case RECORD_DELTA: {
-        RecordDelta *rcd_node = (RecordDelta *) node;
-        if (rcd_node->op_type == RecordDelta::INSERT
-            && key_equal(rcd_node->key, key)
-            && (!deleted.count(rcd_node->value))) {
-          total_count++;
-          if (value_equal(rcd_node->value, value)) {
-            pair_count++;
-          }
-        }
-        else if (rcd_node->op_type == RecordDelta::DELETE &&
-            key_equal(rcd_node->key, key)) {
-          deleted.insert(rcd_node->value);
-        }
-      }
-        break;
-      case LEAF: {
-        LeafNode *lf_node = (LeafNode *) node;
-        for (int i = 0; i < (lf_node->slotuse); i++) {
-          if (key_equal(lf_node->slotkey[i], key)) {
-            for (ValueType v: *(lf_node->slotdata[i])) {
-              if (deleted.count(v)) continue;
-              total_count++;
-              if (value_equal(v, value))
-                pair_count++;
-            }
-            break;
-          }
-        }
-      }
-        return pair_count;
-      case MERGE_DELTA: {
-        if (key_greaterequal(key, ((MergeDelta *) node)->Kp)) {
-          node = ((MergeDelta *) node)->orignal_node;
-          return count_pair(key, value, node, total_count, pair_count, deleted);
-        }
-      }
-        break;
-
-      case SPLIT_DELTA: {
-        if (key_greaterequal(key, ((SplitDelta *) node)->Kp)) {
-          PidType pid = ((SplitDelta *) node)->pQ;
-          return count_pair(key, value, mapping_table.get(pid),
-                            total_count, pair_count, deleted);
-        }
-      }
-        break;
-      default:
-        break;
-    }
-    return count_pair(key, value, node->next, total_count, pair_count, deleted);
-  };
-
   std::pair<int, int> count_pair(KeyType key, ValueType value, Node* listhead) {
     int total_count = 0;
     int pair_count = 0;
-    DelSet deleted_set;
-    count_pair(key, value, listhead, total_count, pair_count, deleted_set);
+    DelSet deleted;
+    Node* node = listhead;
+
+    while(node != nullptr) {
+      switch (node->node_type) {
+        case RECORD_DELTA: {
+          RecordDelta *rcd_node = (RecordDelta *) node;
+          if (rcd_node->op_type == RecordDelta::INSERT
+              && key_equal(rcd_node->key, key)
+              && (!deleted.count(rcd_node->value))) {
+            total_count++;
+            if (value_equal(rcd_node->value, value)) {
+              pair_count++;
+            }
+          }
+          else if (rcd_node->op_type == RecordDelta::DELETE &&
+                   key_equal(rcd_node->key, key)) {
+            deleted.insert(rcd_node->value);
+          }
+          node = node->next;
+          break;
+        }
+        case LEAF: {
+          LeafNode *lf_node = (LeafNode *) node;
+          for (int i = 0; i < (lf_node->slotuse); i++) {
+            if (key_equal(lf_node->slotkey[i], key)) {
+              for (ValueType v: *(lf_node->slotdata[i])) {
+                if (deleted.count(v)) continue;
+                total_count++;
+                if (value_equal(v, value))
+                  pair_count++;
+              }
+              break;
+            }
+          }
+          assert(node->next == nullptr);
+          node = nullptr;
+          break;
+        }
+        case MERGE_DELTA: {
+          if (key_greaterequal(key, ((MergeDelta *) node)->Kp)) {
+            node = ((MergeDelta *) node)->orignal_node;
+          } else {
+            node = node->next;
+          }
+          break;
+        }
+        case SPLIT_DELTA: {
+          if (key_greaterequal(key, ((SplitDelta *) node)->Kp)) {
+            PidType pid = ((SplitDelta *) node)->pQ;
+            node = mapping_table.get(pid);
+          } else {
+            node = node->next;
+          }
+          break;
+        }
+        default:
+        LOG_ERROR("count pair should not be here");
+          break;
+      }
+    }
+
     return std::pair<int, int>(total_count, pair_count);
   };
 
@@ -963,7 +964,8 @@ class BWTree {
       std::stack<PidType> path = search(root, key);
       if (path.empty()) {
         LOG_ERROR("InsertEntry get empty tree");
-        return false;
+        retrui
+        urn false;
       }
       PidType basic_pid = path.top();
       path.pop();

@@ -38,6 +38,7 @@
 #define GET_TIER2_INDEX(pid) ((pid)&0x3ff)
 
 #define NULL_PID -1
+#define DISALLOW_DUPLICATION
 
 namespace peloton {
 namespace index {
@@ -377,14 +378,14 @@ class BWTree {
     // construction added -mavis
     enum RecordType { INSERT = 0, DELETE = 1, UPDATE = 2 };
 
-    RecordDelta(PidType next, RecordType op, KeyType k, ValueType v,
+    RecordDelta(Node* next, RecordType op, KeyType k, ValueType v,
                 MappingTable& mapping_table, PidType next_leafnode)
         : Node(nullptr, NodeType::RECORD_DELTA, 0, mapping_table,
                next_leafnode) {
       op_type = op;
       key = k;
       // Get node* of original node form mapping_table
-      Node* orig_node = mapping_table.get(next);
+      Node* orig_node = next;
 
       prepend(this, orig_node);
 
@@ -530,7 +531,7 @@ class BWTree {
       next = node->next;
       delete node;
     }
-    return ture;
+    return true;
   }
 
 
@@ -788,7 +789,7 @@ class BWTree {
   bool append_delete(Node* basic_node, KeyType key, ValueType value,
                      bool deletekey) {
     RecordDelta* new_delta =
-        new RecordDelta(basic_node->pid, RecordDelta::DELETE, key, value,
+        new RecordDelta(basic_node, RecordDelta::DELETE, key, value,
                         mapping_table, basic_node->next_leafnode);
 
     if (deletekey) {
@@ -965,10 +966,19 @@ class BWTree {
       redo = false;
     }
 
+
+
     redo = true;
     while (redo) {
+
+#ifdef DISALLOW_DUPLICATION
+      auto count_res = count_pair(key, value, basic_node);
+      if (count_res.second > 0)
+        return false;
+#endif
+
       RecordDelta* new_delta =
-          new RecordDelta(basic_pid, RecordDelta::INSERT, key, value,
+          new RecordDelta(basic_node, RecordDelta::INSERT, key, value,
                           mapping_table, basic_node->next_leafnode);
       new_delta->pid = basic_pid;
       if (!key_is_in(key, new_delta->next))

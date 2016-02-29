@@ -964,8 +964,7 @@ class BWTree {
       std::stack<PidType> path = search(root, key);
       if (path.empty()) {
         LOG_ERROR("InsertEntry get empty tree");
-        retrui
-        urn false;
+        return false;
       }
       PidType basic_pid = path.top();
       path.pop();
@@ -1007,6 +1006,7 @@ class BWTree {
 
     std::vector<std::vector<ValueType>> tmpvals;
 
+    //TODO: move the leaf-node branch inside switch and add inner-node branch.
     // the first node must be the original leaf node itself
     LeafNode* orig_leaf_node = static_cast<LeafNode*>(delta_chain.top());
     delta_chain.pop();

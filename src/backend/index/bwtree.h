@@ -899,6 +899,7 @@ class BWTree {
 
   // public method exposed to users -mavis
   bool insert_entry(KeyType key, ValueType value) {
+
     std::stack<PidType> path = search(BWTree::root, key);
     if (path.empty()) {
       LOG_ERROR("InsertEntry get empty tree");
@@ -906,9 +907,10 @@ class BWTree {
     }
     PidType basic_pid = path.top();
     path.pop();
+    Node *basic_node = mapping_table.get(basic_pid);
 
-    Node* basic_node = mapping_table.get(basic_pid);
-
+    bool redo =true;
+    while (redo) {
 
 //    SplitDelta* new_split;
 //    // check if the leaf node need to be split before we add record delta
@@ -926,31 +928,51 @@ class BWTree {
 //        //TODO: if the CAS fails, release the new_split obj
 //        delete new_split;
 //      }
+//      path = search(BWTree::root, key);
+//      if (path.empty()) {
+//        LOG_ERROR("InsertEntry get empty tree");
+//        return false;
+//      }
+//      basic_pid = path.top();
+//      path.pop();
+//
+//      basic_node = mapping_table.get(basic_pid);
 //
 //    }
-
-    RecordDelta* new_delta = new RecordDelta(basic_pid, RecordDelta::INSERT,
-                                             key, value, mapping_table, basic_node->next_leafnode);
-
-    new_delta->pid = basic_pid;
-
-    if( !key_is_in(key, new_delta->next) )
-      new_delta->slotuse = new_delta->next->slotuse+1;
-
-    std::stack<PidType> now_path = search(BWTree::root, key);
-    if ( now_path.empty() ) {
-      LOG_ERROR("InsertEntry get empty tree");
-      return false;
+//    else
+//      redo = false;
+      redo = false;
     }
-    basic_pid = now_path.top();
-    basic_node = mapping_table.get(basic_pid);
-    new_delta->high_key = basic_node->high_key;
-    new_delta->low_key = basic_node->low_key;
 
-    //TODO: use CAS concatenate this new_delta to the delta chain
-    if ( !mapping_table.set(basic_pid, basic_node, new_delta) ){
-      delete new_delta;
-      return false;
+    redo = true;
+    while (redo) {
+
+      RecordDelta *new_delta = new RecordDelta(basic_pid, RecordDelta::INSERT,
+                                               key, value, mapping_table, basic_node->next_leafnode);
+      new_delta->pid = basic_pid;
+      if (!key_is_in(key, new_delta->next))
+        new_delta->slotuse = new_delta->next->slotuse + 1;
+
+      basic_node = mapping_table.get(basic_pid);
+      new_delta->high_key = basic_node->high_key;
+      new_delta->low_key = basic_node->low_key;
+
+      //TODO: use CAS concatenate this new_delta to the delta chain
+      if (!mapping_table.set(basic_pid, basic_node, new_delta)) {
+        delete new_delta;
+        path = search(BWTree::root, key);
+        if (path.empty()) {
+          LOG_ERROR("InsertEntry get empty tree");
+          return false;
+        }
+        basic_pid = path.top();
+        path.pop();
+        basic_node = mapping_table.get(basic_pid);
+
+      }
+      else {
+        redo = false;
+      }
     }
 
     return true;

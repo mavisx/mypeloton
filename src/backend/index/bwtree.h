@@ -958,7 +958,8 @@ class BWTree {
       new_delta->low_key = basic_node->low_key;
 
       //TODO: use CAS concatenate this new_delta to the delta chain
-      if (!mapping_table.set(basic_pid, basic_node, new_delta)) {
+      redo = !mapping_table.set(basic_pid, basic_node, new_delta);
+      if (redo) {
         delete new_delta;
         path = search(BWTree::root, key);
         if (path.empty()) {
@@ -968,10 +969,6 @@ class BWTree {
         basic_pid = path.top();
         path.pop();
         basic_node = mapping_table.get(basic_pid);
-
-      }
-      else {
-        redo = false;
       }
     }
 

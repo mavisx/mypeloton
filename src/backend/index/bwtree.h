@@ -190,7 +190,7 @@ class BWTree {
           &expectded2, addr)) {
         return new_pid;
       } else {
-        return -1;
+        return NULL_PID;
       }
     }
 

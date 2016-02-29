@@ -523,6 +523,10 @@ class BWTree {
     Node* next = node;
     while(next){
       node = next;
+      if(node->node_type == MERGE_DELTA){
+        PidType temp = ((MergeDelta*)node) -> orignal_node->pid;
+        delete_chain(mapping_table.get(temp));
+      }
       next = node->next;
       delete node;
     }

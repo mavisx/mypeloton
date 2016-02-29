@@ -21,6 +21,7 @@
 #include <unordered_set>
 #include "../common/types.h"
 #include "../storage/tuple.h"
+#include "index.h"
 
 // in bytes
 #define BWTREE_NODE_SIZE 64
@@ -443,8 +444,8 @@ class BWTree {
  public:
   // constructor
 
-  BWTree(const KeyComparator& kc, const KeyEqualityChecker& ke)
-      : m_key_less(kc), m_key_equal(ke), m_value_equal(ItemPointerEqualityChecker()) {
+  BWTree(const KeyComparator& kc, const KeyEqualityChecker& ke, peloton::index::IndexMetadata *metadata)
+      : m_key_less(kc), m_key_equal(ke), m_value_equal(ItemPointerEqualityChecker()), m_metadata(metadata) {
     LeafNode* addr = new LeafNode(mapping_table, NULL_PID );
    long newpid = mapping_table.add(addr);
     if (newpid >= 0) {
@@ -503,6 +504,7 @@ class BWTree {
   KeyComparator m_key_less;
   KeyEqualityChecker m_key_equal;
   ItemPointerEqualityChecker m_value_equal;
+  peloton::index::IndexMetadata* m_metadata;
 
   std::stack<PidType> search(PidType pid, KeyType key) {
     auto node = mapping_table.get(pid);
@@ -1018,23 +1020,27 @@ class BWTree {
       tmp_cur_node = tmp_cur_node->next;
     }
 
+
     // prepare two array to store what logical k-v pairs we have
     std::vector<KeyType> tmpkeys;
 
     std::vector<std::vector<ValueType>> tmpvals;
 
     // the first node must be the original leaf node itself
+    assert(delta_chain.top()->node_type == LEAF);
+
     LeafNode* orig_leaf_node = static_cast<LeafNode*>(delta_chain.top());
     delta_chain.pop();
 
     // copy the data in the base node
     for (int i = 0; i < orig_leaf_node->slotuse; i++) {
-
       tmpkeys.push_back(orig_leaf_node->slotkey[i]);
       tmpvals.push_back(std::vector<ValueType>(*(orig_leaf_node->slotdata[i])));
-
     }
 
+    LOG_INFO("Consolidate: delta_chain.len = %lu",delta_chain.size());
+
+    int c = 0;
     // traverse the delta chain
     while (!delta_chain.empty()) {
       // get top delta node
@@ -1048,13 +1054,20 @@ class BWTree {
           RecordDelta *recordDelta = static_cast<RecordDelta *>(cur_delta);
 
           if (recordDelta->op_type == RecordDelta::INSERT) {
-            for (int x = 0; x < recordDelta->slotuse; x++) {
+
+
+            for (int x = 0; x < tmpkeys.size(); x++) {
               if (key_equal(tmpkeys[x], recordDelta->key)) {
                 tmpvals[x].push_back(recordDelta->value);
                 no_key = false;
                 break;
               }
             }
+
+            LOG_INFO("insert %d", ++c);
+//            std::cout << recordDelta->key.GetTupleForComparison(m_metadata->GetKeySchema()).GetValue(0) << " "
+//                << recordDelta->key.GetTupleForComparison(m_metadata->GetKeySchema()).GetValue(1) << std::endl;
+
             // key not exists, need to insert somewhere
             if (no_key) {
               if (recordDelta->slotuse == 0) {
@@ -1148,6 +1161,8 @@ class BWTree {
     // scan the leaf nodes list from begin to the end
     while (node != nullptr) {
       auto all_key_value_pair =  fake_consolidate(node);
+
+      LOG_INFO("fake_consolidate size: %lu", all_key_value_pair.second.size());
 
       for(auto const& value: all_key_value_pair.second) {
         v.insert(v.end(), value.begin(), value.end());

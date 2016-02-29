@@ -15,6 +15,8 @@
 #include "backend/index/index_key.h"
 #include "backend/storage/tuple.h"
 
+// add lock to debug
+//#define LOCK_DEBUG
 
 namespace std{
 template <>
@@ -37,7 +39,7 @@ template <typename KeyType, typename ValueType, class KeyComparator,
 BWTreeIndex<KeyType, ValueType, KeyComparator, KeyEqualityChecker>::BWTreeIndex(
     IndexMetadata *metadata)
     : Index(metadata),
-      container(KeyComparator(metadata), KeyEqualityChecker(metadata)),
+      container(KeyComparator(metadata), KeyEqualityChecker(metadata), metadata),
       equals(metadata),
       comparator(metadata) {}
 
@@ -58,6 +60,10 @@ bool BWTreeIndex<KeyType, ValueType, KeyComparator,
 
   LOG_INFO("Entering InsertEntry");
 
+  #ifdef LOCK_DEBUG
+    index_lock.WriteLock();
+  #endif
+
   KeyType index_key;
   index_key.SetFromKey(key);
 
@@ -66,6 +72,10 @@ bool BWTreeIndex<KeyType, ValueType, KeyComparator,
   bool ret = container.insert_entry(key_pair.first, key_pair.second);
 
   container.print_info(0);
+
+  #ifdef LOCK_DEBUG
+    index_lock.Unlock();
+  #endif
 
   return ret;
 }
@@ -78,12 +88,21 @@ bool BWTreeIndex<KeyType, ValueType, KeyComparator,
                                                   __attribute__((unused))
                                                   const ItemPointer location) {
   LOG_INFO("Entering DeleteEntry");
+
+#ifdef LOCK_DEBUG
+  index_lock.WriteLock();
+#endif
+
   KeyType index_key;
   index_key.SetFromKey(key);
 
   bool ret = container.delete_entry(index_key, location);
 
   container.print_info(0);
+
+#ifdef LOCK_DEBUG
+  index_lock.Unlock();
+#endif
 
   return ret;
 }
@@ -100,6 +119,9 @@ BWTreeIndex<KeyType, ValueType, KeyComparator, KeyEqualityChecker>::Scan(
   std::vector<std::vector<ItemPointer>> values_result;
   std::vector<ItemPointer> result;
 
+#ifdef LOCK_DEBUG
+  index_lock.ReadLock();
+#endif
   {
     switch(scan_direction){
       case SCAN_DIRECTION_TYPE_FORWARD:
@@ -124,17 +146,29 @@ BWTreeIndex<KeyType, ValueType, KeyComparator, KeyEqualityChecker>::Scan(
         break;
     }
   }
-
+#ifdef LOCK_DEBUG
+  index_lock.Unlock();
+#endif
   return result;
 }
 
 template <typename KeyType, typename ValueType, class KeyComparator, class KeyEqualityChecker>
 std::vector<ItemPointer> BWTreeIndex<KeyType, ValueType, KeyComparator,
                                      KeyEqualityChecker>::ScanAllKeys() {
+
+  LOG_INFO("Entering ScanAllKeys");
+
   std::vector<ItemPointer> result;
+
+#ifdef LOCK_DEBUG
+  index_lock.ReadLock();
+#endif
 
   container.scan_all(result);
 
+#ifdef LOCK_DEBUG
+  index_lock.Unlock();
+#endif
   return result;
 }
 
@@ -148,13 +182,17 @@ BWTreeIndex<KeyType, ValueType, KeyComparator, KeyEqualityChecker>::ScanKey(
     __attribute__((unused)) const storage::Tuple *key) {
 
   LOG_INFO("Entering ScanKey");
-
+#ifdef LOCK_DEBUG
+  index_lock.ReadLock();
+#endif
   std::vector<ItemPointer> result;
   KeyType index_key;
   index_key.SetFromKey(key);
 
   container.get_value(index_key, result);
-
+#ifdef LOCK_DEBUG
+  index_lock.Unlock();
+#endif
   return result;
 }
 

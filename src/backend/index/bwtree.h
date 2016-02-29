@@ -964,8 +964,7 @@ class BWTree {
       std::stack<PidType> path = search(root, key);
       if (path.empty()) {
         LOG_ERROR("InsertEntry get empty tree");
-        retrui
-        urn false;
+        return false;
       }
       PidType basic_pid = path.top();
       path.pop();

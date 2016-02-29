@@ -38,6 +38,7 @@
 #define GET_TIER2_INDEX(pid) ((pid)&0x3ff)
 
 #define NULL_PID -1
+#define DISALLOW_DUPLICATION
 
 namespace peloton {
 namespace index {
@@ -941,6 +942,13 @@ class BWTree {
       //      redo = false;
       redo = false;
     }
+
+#ifdef DISALLOW_DUPLICATION
+    auto count_res = count_pair(key, value, basic_node);
+    if (count_res.second > 0)
+      return false;
+#endif
+
 
     redo = true;
     while (redo) {

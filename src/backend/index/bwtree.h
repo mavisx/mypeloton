@@ -908,25 +908,24 @@ class BWTree {
 
     Node* basic_node = mapping_table.get(basic_pid);
 
+    SplitDelta* new_split;
+    // check if the leaf node need to be split before we add record delta
+    if ( basic_node -> need_split() ) {
+      KeyType pivotal;
 
-//    SplitDelta* new_split;
-//    // check if the leaf node need to be split before we add record delta
-//    if ( basic_node -> need_split() ) {
-//      KeyType pivotal;
-//
-//      // create a slibling leaf node
-//      PidType new_leaf_pid = create_leaf(basic_pid, &pivotal);
-//
-//      // ceate and prepend a split node
-//      new_split = new SplitDelta(basic_node, pivotal,
-//                                             new_leaf_pid, mapping_table, new_leaf_pid);
-//
-//      if ( !mapping_table.set(basic_pid, basic_node, new_split)) {
-//        //TODO: if the CAS fails, release the new_split obj
-//        delete new_split;
-//      }
-//
-//    }
+      // create a slibling leaf node
+      PidType new_leaf_pid = create_leaf(basic_pid, &pivotal);
+
+      // ceate and prepend a split node
+      new_split = new SplitDelta(basic_node, pivotal,
+                                             new_leaf_pid, mapping_table, new_leaf_pid);
+
+      if ( !mapping_table.set(basic_pid, basic_node, new_split)) {
+        //TODO: if the CAS fails, release the new_split obj
+        delete new_split;
+      }
+
+    }
 
     RecordDelta* new_delta = new RecordDelta(basic_pid, RecordDelta::INSERT,
                                              key, value, mapping_table, basic_node->next_leafnode);

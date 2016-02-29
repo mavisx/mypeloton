@@ -195,7 +195,7 @@ class BWTree {
           &expectded2, addr)) {
         return new_pid;
       } else {
-        return -1;
+        return NULL_PID;
       }
     }
 
@@ -985,7 +985,7 @@ class BWTree {
 
   bool update_entry(KeyType key, ValueType value);
 
-  std::pair<std::vector<KeyType>*, std::vector<std::vector<ValueType>*>*>
+  std::pair<std::vector<KeyType>, std::vector<std::vector<ValueType>>>
       fake_consolidate( Node* new_delta) {
 
     std::stack<Node*> delta_chain;
@@ -996,11 +996,9 @@ class BWTree {
     }
 
     // prepare two array to store what logical k-v pairs we have
-    std::vector<KeyType>* tmpkeys_pointer = new std::vector<KeyType>();
-    std::vector<KeyType> & tmpkeys = *tmpkeys_pointer;
+    std::vector<KeyType> tmpkeys;
 
-    std::vector<std::vector<ValueType>*>* tmpvals_pointer = new std::vector<std::vector<ValueType>*>();
-    std::vector<std::vector<ValueType>*>& tmpvals = *tmpvals_pointer;
+    std::vector<std::vector<ValueType>> tmpvals;
 
     // the first node must be the original leaf node itself
     LeafNode* orig_leaf_node = static_cast<LeafNode*>(delta_chain.top());
@@ -1008,8 +1006,10 @@ class BWTree {
 
     // copy the data in the base node
     for (int i = 0; i < orig_leaf_node->slotuse; i++) {
+
       tmpkeys.push_back(orig_leaf_node->slotkey[i]);
-      tmpvals.push_back(new std::vector<ValueType>(*(orig_leaf_node->slotdata[i])));
+      tmpvals.push_back(std::vector<ValueType>(*(orig_leaf_node->slotdata[i])));
+
     }
 
     // traverse the delta chain
@@ -1021,26 +1021,25 @@ class BWTree {
 
         case RECORD_DELTA: {
           // first see the key has already existed
-          bool no_dedup = true;
+          bool no_key = true;
           RecordDelta *recordDelta = static_cast<RecordDelta *>(cur_delta);
 
           if (recordDelta->op_type == RecordDelta::INSERT) {
             for (int x = 0; x < recordDelta->slotuse; x++) {
               if (key_equal(tmpkeys[x], recordDelta->key)) {
-                tmpvals[x]->push_back(recordDelta->value);
-                no_dedup = false;
+                tmpvals[x].push_back(recordDelta->value);
+                no_key = false;
                 break;
               }
             }
             // key not exists, need to insert somewhere
-            if (no_dedup) {
+            if (no_key) {
               if (recordDelta->slotuse == 0) {
                 tmpkeys.push_back(recordDelta->key);
-                tmpvals.push_back(new std::vector<ValueType>());
-                tmpvals[0]->push_back(recordDelta->value);
+                tmpvals.push_back(std::vector<ValueType>(1, recordDelta->value));
               } else {
                 int target_pos = 0;
-                for (int x = recordDelta->slotuse-1; x >= 0; x--) {
+                for (int x = ((int)tmpkeys.size())-1; x >= 0; x--) {
                   if (key_greaterequal(recordDelta->key, tmpkeys[x])) {
                     target_pos = x + 1;
                     break;
@@ -1048,34 +1047,33 @@ class BWTree {
                 }
 
                 tmpkeys.insert(tmpkeys.begin() + target_pos, recordDelta->key);
-                tmpvals.insert(tmpvals.begin() + target_pos, new std::vector<ValueType>());
-                tmpvals[target_pos]->push_back(recordDelta->value);
+                tmpvals.insert(tmpvals.begin() + target_pos,
+                               std::vector<ValueType>(1,recordDelta->value));
               }
+              assert(tmpvals.size() == recordDelta->slotuse);
             } // end of RecordDelta::INSERT
 
 
           } else if (recordDelta->op_type == RecordDelta::DELETE) {
-            assert(tmpvals.size() == recordDelta->slotuse);
-
-            for (int x = 0; x < recordDelta->slotuse; x++) {
+            for (int x = 0; x < tmpkeys.size(); x++) {
               if (key_equal(tmpkeys[x], recordDelta->key)) {
                 // remove value in the vector
-                for (int j = tmpvals[x]->size() - 1; j>=0; j--) {
-                  if (m_value_equal(tmpvals[x]->at(j), recordDelta->value)) {
-                    tmpvals[x]->erase( tmpvals[x]->begin() + j );
+                for (int j = ((int)tmpvals[x].size() - 1); j>=0; j--) {
+                  if (m_value_equal(tmpvals[x][j], recordDelta->value)) {
+                    tmpvals[x].erase( tmpvals[x].begin() + j );
                   }
                 }
 
 
                 // if vector is empty, needed to be removed
-                if( tmpvals[x]->size() == 0 ){
-                  delete tmpvals[x];
+                if( tmpvals[x].size() == 0 ){
                   tmpkeys.erase(tmpkeys.begin() + x);
                   tmpvals.erase(tmpvals.begin() + x);
                 }
                 break;
               }
             }
+            assert(tmpvals.size() == recordDelta->slotuse);
 
           }
           break;
@@ -1093,7 +1091,7 @@ class BWTree {
       }
     }
 
-    return std::make_pair(tmpkeys_pointer, tmpvals_pointer);
+    return std::make_pair(tmpkeys, tmpvals);
   }
 
   PidType create_leaf(PidType new_delta_pid, KeyType* pivotal) {
@@ -1103,11 +1101,11 @@ class BWTree {
     new_leaf->delta_list_len = 0;
     new_leaf->high_key = new_delta->high_key;
 
-    std::pair< std::vector<KeyType>*, std::vector<std::vector<ValueType>*>* > arrays = fake_consolidate(new_delta);
+    std::pair< std::vector<KeyType>, std::vector<std::vector<ValueType>>> arrays = fake_consolidate(new_delta);
 
     for (int i = leafslotmax / 2; i < leafslotmax; i++) {
-      new_leaf->slotkey[i - leafslotmax / 2] = arrays.first->at(i);
-      new_leaf->slotdata[i - leafslotmax / 2] = arrays.second->at(i);
+      new_leaf->slotkey[i - leafslotmax / 2] = arrays.first[i];
+      new_leaf->slotdata[i - leafslotmax / 2] = new std::vector<ValueType>(arrays.second[i]);
     }
     new_leaf->low_key = new_leaf->slotkey[0];
     new_leaf->slotuse = (unsigned short)(leafslotmax / 2);
@@ -1128,8 +1126,8 @@ class BWTree {
     while (node != nullptr) {
       auto all_key_value_pair =  fake_consolidate(node);
 
-      for(auto const& value: *(all_key_value_pair.second)) {
-        v.insert(v.end(), value->begin(), value->end());
+      for(auto const& value: all_key_value_pair.second) {
+        v.insert(v.end(), value.begin(), value.end());
       }
 
       node = mapping_table.get(node->next_leafnode);
@@ -1142,9 +1140,9 @@ class BWTree {
 
     // scan the leaf nodes list from begin to the end
     while (node != nullptr) {
-      auto all_key_value_pair =  fake_consolidate(node);
-      std::vector<KeyType> keys = *(all_key_value_pair.first);
-      std::vector<std::vector<ValueType>*> values = *(all_key_value_pair.second);
+      auto all_key_value_pair = fake_consolidate(node);
+      std::vector<KeyType>& keys = all_key_value_pair.first;
+      std::vector<std::vector<ValueType>>& values = all_key_value_pair.second;
 
       keys_result.insert(keys_result.end(), keys.begin(), keys.end());
       values_result.insert(values_result.end(), values.begin(), values.end());

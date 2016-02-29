@@ -55,11 +55,15 @@ bool BWTreeIndex<KeyType, ValueType, KeyComparator,
                                                   const storage::Tuple *key,
                                                   __attribute__((unused))
                                                   const ItemPointer location) {
+
+  LOG_INFO("Entering InsertEntry");
+
   KeyType index_key;
   index_key.SetFromKey(key);
 
   auto key_pair = std::pair<KeyType, ValueType>(index_key, location);
 
+  LOG_INFO("Leaving InsertEntry");
   return container.insert_entry(key_pair.first, key_pair.second);
 }
 

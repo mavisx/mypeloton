@@ -90,6 +90,7 @@ TEST(IndexTests, BasicTest) {
   key0->SetValue(1, ValueFactory::GetStringValue("a"), pool);
 
   // INSERT
+  LOG_INFO("I am going to insert");
   index->InsertEntry(key0.get(), item0);
 
   locations = index->ScanKey(key0.get());

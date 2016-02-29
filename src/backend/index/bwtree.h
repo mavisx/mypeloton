@@ -446,6 +446,7 @@ class BWTree {
       // initialize the root, head and tail pid.
       root = newpid;
       headleaf = tailleaf = newpid;
+      addr->pid = newpid;
     } else {
       LOG_ERROR("Can't create the initial leafNode!");
     }
@@ -527,6 +528,14 @@ class BWTree {
     switch (node->node_type) {
       case LEAF:
       case RECORD_DELTA:
+        if (node->node_type == LEAF) {
+          LOG_INFO("Search Range Info: meet a leaf, pid: %d, slotuse %d",
+                   node->pid, node->slotuse );
+        }
+        else {
+          LOG_INFO("Search Range Info: meet a record");
+        }
+
         return node->pid;
 
       case INDEX_ENTRY_DELTA:
@@ -800,10 +809,10 @@ class BWTree {
     PidType target_node = path.top();
     Node * next = mapping_table.get(target_node);
 
-    if (!next->is_leaf) {
-      LOG_ERROR("get_value's search result is not a leaf");
-      return;
-    }
+//    if (!next->is_leaf) {
+//      LOG_ERROR("get_value's search result is not a leaf");
+//      return;
+//    }
 
     DelSet delset;
 

@@ -63,8 +63,11 @@ bool BWTreeIndex<KeyType, ValueType, KeyComparator,
 
   auto key_pair = std::pair<KeyType, ValueType>(index_key, location);
 
-  LOG_INFO("Leaving InsertEntry");
-  return container.insert_entry(key_pair.first, key_pair.second);
+  bool ret = container.insert_entry(key_pair.first, key_pair.second);
+
+  container.print_info(0);
+
+  return ret;
 }
 
 template <typename KeyType, typename ValueType, class KeyComparator,
@@ -78,8 +81,11 @@ bool BWTreeIndex<KeyType, ValueType, KeyComparator,
   KeyType index_key;
   index_key.SetFromKey(key);
 
-  LOG_INFO("Leaving DeleteEntry");
-  return container.delete_entry(index_key, location);
+  bool ret = container.delete_entry(index_key, location);
+
+  container.print_info(0);
+
+  return ret;
 }
 
 template <typename KeyType, typename ValueType, class KeyComparator,
@@ -91,7 +97,7 @@ BWTreeIndex<KeyType, ValueType, KeyComparator, KeyEqualityChecker>::Scan(
     __attribute__((unused)) const std::vector<ExpressionType> &expr_types,
     __attribute__((unused)) const ScanDirectionType &scan_direction) {
   std::vector<KeyType> keys_result;
-  std::vector<std::vector<ItemPointer>*> values_result;
+  std::vector<std::vector<ItemPointer>> values_result;
   std::vector<ItemPointer> result;
 
   {
@@ -107,7 +113,7 @@ BWTreeIndex<KeyType, ValueType, KeyComparator, KeyEqualityChecker>::Scan(
             // Compare the current key in the scan with "values" based on "expression types"
             // For instance, "5" EXPR_GREATER_THAN "2" is true
             if (Compare(tuple, key_column_ids, expr_types, values) == true) {
-              result.insert(result.end(), values_result[i]->begin(), values_result[i]->end());
+              result.insert(result.end(), values_result[i].begin(), values_result[i].end());
             }
           }
         }
@@ -140,6 +146,8 @@ template <typename KeyType, typename ValueType, class KeyComparator,
 std::vector<ItemPointer>
 BWTreeIndex<KeyType, ValueType, KeyComparator, KeyEqualityChecker>::ScanKey(
     __attribute__((unused)) const storage::Tuple *key) {
+
+  LOG_INFO("Entering ScanKey");
 
   std::vector<ItemPointer> result;
   KeyType index_key;

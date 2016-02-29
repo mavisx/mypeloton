@@ -977,13 +977,11 @@ class BWTree {
 
       bool deletekey = (tv_count_pair.second >= tv_count_pair.first);
 
-      redo = append_delete(basic_node, key, value, deletekey);
+      redo = !append_delete(basic_node, key, value, deletekey);
     }
     // TODO:apend merge_delta
 
     // TODO:apend delete_index_term_delta
-
-    print_info(root);
 
     return !redo;
   };
@@ -1140,7 +1138,7 @@ class BWTree {
   }
 
   void scan(std::vector<KeyType> &keys_result,
-      std::vector<std::vector<ItemPointer>*> &values_result) {
+      std::vector<std::vector<ItemPointer>> &values_result) {
     Node * node = mapping_table.get(headleaf);
 
     // scan the leaf nodes list from begin to the end

@@ -38,7 +38,6 @@
 #define GET_TIER2_INDEX(pid) ((pid)&0x3ff)
 
 #define NULL_PID -1
-#define DISALLOW_DUPLICATION
 
 namespace peloton {
 namespace index {
@@ -113,6 +112,7 @@ class BWTree {
   struct Node;
   struct MappingTable {
    private:
+    // The first level mapping table
     Node** mappingtable_1[MAPPING_TABLE_SIZE];
     std::atomic<unsigned long> nextPid;
 
@@ -124,9 +124,27 @@ class BWTree {
       nextPid = 0;
     }
 
+    bool delete_chain(Node* node) {
+      Node* next = node;
+      while (next) {
+        node = next;
+        if (node->node_type == MERGE_DELTA) {
+          PidType temp = ((MergeDelta*)node)->orignal_node->pid;
+          delete_chain(this->get(temp));
+        }
+        next = node->next;
+        delete node;
+      }
+      return true;
+    }
+
     ~MappingTable() {
       for (int i = 0; i < MAPPING_TABLE_SIZE; i++) {
         if (mappingtable_1[i] != nullptr) {
+          for (int j = 0; j < MAPPING_TABLE_SIZE; j++) {
+            if (mappingtable_1[i][j] != nullptr)
+            delete_chain(mappingtable_1[i][j]);
+          }
           delete[] mappingtable_1[i];
           mappingtable_1[i] = nullptr;
         }
@@ -151,6 +169,7 @@ class BWTree {
       long tier2_idx = GET_TIER2_INDEX(pid);
 
       if (mappingtable_1[tier1_idx] == nullptr) {
+        LOG_ERROR("meet a null level1 idx");
         return false;
       }
 
@@ -204,19 +223,7 @@ class BWTree {
     }
   };
 
- private:
-  // We need a root node
-  PidType root;
 
-  MappingTable mapping_table;
-
-  /// Pointer to first leaf in the double linked leaf chain
-  PidType headleaf;
-
-  /// Pointer to last leaf in the double linked leaf chain
-  PidType tailleaf;
-
- public:
   /**
    * The Node inheritance hierachy
    * **/
@@ -285,6 +292,21 @@ class BWTree {
   };
 
  private:
+  // We need a root node
+  PidType root;
+
+  // the mapping table used in our BWTree
+  MappingTable mapping_table;
+
+  /// Pointer to first leaf in the double linked leaf chain
+  PidType headleaf;
+
+  /// Pointer to last leaf in the double linked leaf chain
+  PidType tailleaf;
+
+
+ private:
+
   /// Extended structure of a inner node in-memory. Contains only keys and no
   /// data items.
   struct InnerNode : public Node {
@@ -353,14 +375,14 @@ class BWTree {
 
     /// Set the (key,data) pair in slot. Overloaded function used by
     /// bulk_load().
-    inline void set_slot(unsigned short slot, const PairType& value) {
-      assert(slot < Node::slotuse);
-      slotkey[slot] = value.first;
-      if (slotdata[slot] == nullptr) {
-        slotdata[slot] = new std::vector<ValueType>();
-      }
-      slotdata[slot]->push_back(value.second);
-    }
+//    inline void set_slot(unsigned short slot, const PairType& value) {
+//      assert(slot < Node::slotuse);
+//      slotkey[slot] = value.first;
+//      if (slotdata[slot] == nullptr) {
+//        slotdata[slot] = new std::vector<ValueType>();
+//      }
+//      slotdata[slot]->push_back(value.second);
+//    }
 
     /// Set the key pair in slot. Overloaded function used by
     /// bulk_load().
@@ -461,13 +483,13 @@ class BWTree {
       root = newpid;
       headleaf = tailleaf = newpid;
     } else {
+      delete addr;
       LOG_ERROR("Can't create the initial leafNode!");
     }
   }
 
   // destructor
   ~BWTree() {
-    delete_chain(mapping_table.get(root));
     mapping_table.~MappingTable();
   };
 
@@ -516,20 +538,6 @@ class BWTree {
   KeyEqualityChecker m_key_equal;
   ItemPointerEqualityChecker m_value_equal;
   peloton::index::IndexMetadata* m_metadata;
-
-  bool delete_chain(Node* node) {
-    Node* next = node;
-    while (next) {
-      node = next;
-      if (node->node_type == MERGE_DELTA) {
-        PidType temp = ((MergeDelta*)node)->orignal_node->pid;
-        delete_chain(mapping_table.get(temp));
-      }
-      next = node->next;
-      delete node;
-    }
-    return true;
-  }
 
   std::stack<PidType> search(PidType pid, KeyType key) {
     auto node = mapping_table.get(pid);
@@ -795,6 +803,7 @@ class BWTree {
     if (mapping_table.set(basic_node->pid, basic_node, new_delta)) {
       return true;
     } else {
+      LOG_ERROR("NEED REDO");
       delete new_delta;
       return false;
     };
@@ -962,12 +971,14 @@ class BWTree {
       redo = false;
     }
 
+
     redo = true;
     while (redo) {
-#ifdef DISALLOW_DUPLICATION
-      auto count_res = count_pair(key, value, basic_node);
-      if (count_res.second > 0) return false;
-#endif
+      // check whether we can insert duplicate key
+      if (m_metadata->HasUniqueKeys()) {
+        auto count_res = count_pair(key, value, basic_node);
+        if (count_res.first > 0) return false;
+      }
 
       RecordDelta* new_delta =
           new RecordDelta(basic_node, RecordDelta::INSERT, key, value,
@@ -983,6 +994,7 @@ class BWTree {
       // TODO: use CAS concatenate this new_delta to the delta chain
       redo = !mapping_table.set(basic_pid, basic_node, new_delta);
       if (redo) {
+        LOG_ERROR("NEED REDO");
         delete new_delta;
         path = search(BWTree::root, key);
         if (path.empty()) {

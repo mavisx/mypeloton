@@ -19,17 +19,6 @@
 // #define LOCK_DEBUG
 // #define MY_DEBUG
 
-namespace std {
-template <>
-struct hash<peloton::ItemPointer> {
-  size_t operator()(const peloton::ItemPointer &ptr) const {
-    peloton::oid_t hashkey = (ptr.block << 32) + ptr.offset;
-    hash<peloton::oid_t> pelonton_hash;
-    return pelonton_hash(hashkey);
-  }
-};
-}
-
 namespace peloton {
 namespace index {
 
@@ -58,6 +47,7 @@ bool BWTreeIndex<KeyType, ValueType, KeyComparator,
                                                   __attribute__((unused))
                                                   const ItemPointer location) {
   LOG_INFO("Entering InsertEntry");
+  printf("I-start\n");
 
 #ifdef LOCK_DEBUG
   index_lock.WriteLock();
@@ -78,6 +68,7 @@ bool BWTreeIndex<KeyType, ValueType, KeyComparator,
   index_lock.Unlock();
 #endif
 
+  printf("I-end\n");
   return ret;
 }
 
@@ -89,6 +80,7 @@ bool BWTreeIndex<KeyType, ValueType, KeyComparator,
                                                   __attribute__((unused))
                                                   const ItemPointer location) {
   LOG_INFO("Entering DeleteEntry");
+  printf("D-start\n");
 
 #ifdef LOCK_DEBUG
   index_lock.WriteLock();
@@ -107,6 +99,7 @@ bool BWTreeIndex<KeyType, ValueType, KeyComparator,
   index_lock.Unlock();
 #endif
 
+  printf("D-end\n");
   return ret;
 }
 
@@ -118,6 +111,8 @@ BWTreeIndex<KeyType, ValueType, KeyComparator, KeyEqualityChecker>::Scan(
     __attribute__((unused)) const std::vector<oid_t> &key_column_ids,
     __attribute__((unused)) const std::vector<ExpressionType> &expr_types,
     __attribute__((unused)) const ScanDirectionType &scan_direction) {
+  printf("Scan-start\n");
+
   std::vector<KeyType> keys_result;
   std::vector<std::vector<ItemPointer>> values_result;
   std::vector<ItemPointer> result;
@@ -154,6 +149,7 @@ BWTreeIndex<KeyType, ValueType, KeyComparator, KeyEqualityChecker>::Scan(
 #ifdef LOCK_DEBUG
   index_lock.Unlock();
 #endif
+  printf("Scan-end\n");
   return result;
 }
 
@@ -162,7 +158,7 @@ template <typename KeyType, typename ValueType, class KeyComparator,
 std::vector<ItemPointer> BWTreeIndex<KeyType, ValueType, KeyComparator,
                                      KeyEqualityChecker>::ScanAllKeys() {
   LOG_INFO("Entering ScanAllKeys");
-
+  printf("ScanAll-start\n");
   std::vector<ItemPointer> result;
 
 #ifdef LOCK_DEBUG
@@ -174,6 +170,7 @@ std::vector<ItemPointer> BWTreeIndex<KeyType, ValueType, KeyComparator,
 #ifdef LOCK_DEBUG
   index_lock.Unlock();
 #endif
+  printf("ScanAll-end\n");
   return result;
 }
 
@@ -186,6 +183,7 @@ std::vector<ItemPointer>
 BWTreeIndex<KeyType, ValueType, KeyComparator, KeyEqualityChecker>::ScanKey(
     __attribute__((unused)) const storage::Tuple *key) {
   LOG_INFO("Entering ScanKey");
+  printf("ScanKey-start\n");
 #ifdef LOCK_DEBUG
   index_lock.ReadLock();
 #endif
@@ -197,6 +195,7 @@ BWTreeIndex<KeyType, ValueType, KeyComparator, KeyEqualityChecker>::ScanKey(
 #ifdef LOCK_DEBUG
   index_lock.Unlock();
 #endif
+  printf("ScanKey-end\n");
   return result;
 }
 

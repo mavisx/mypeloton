@@ -39,6 +39,16 @@
 
 #define NULL_PID -1
 
+namespace std {
+struct HashPair {
+  size_t operator()(peloton::ItemPointer const& ptr) const {
+    using std::hash;
+    return hash<peloton::oid_t>()(ptr.block) ^
+           hash<peloton::oid_t>()(ptr.offset);
+  }
+};
+}
+
 namespace peloton {
 namespace index {
 
@@ -143,12 +153,14 @@ class BWTree {
         if (mappingtable_1[i] != nullptr) {
           for (int j = 0; j < MAPPING_TABLE_SIZE; j++) {
             if (mappingtable_1[i][j] != nullptr)
-            delete_chain(mappingtable_1[i][j]);
+              delete_chain(mappingtable_1[i][j]);
           }
           delete[] mappingtable_1[i];
           mappingtable_1[i] = nullptr;
         }
       }
+
+      printf("end of destruct BWTree\n");
     }
 
     Node* get(PidType pid) {
@@ -222,7 +234,6 @@ class BWTree {
       mappingtable_1[tier1_idx][tier2_idx] = nullptr;
     }
   };
-
 
   /**
    * The Node inheritance hierachy
@@ -304,9 +315,7 @@ class BWTree {
   /// Pointer to last leaf in the double linked leaf chain
   PidType tailleaf;
 
-
  private:
-
   /// Extended structure of a inner node in-memory. Contains only keys and no
   /// data items.
   struct InnerNode : public Node {
@@ -375,14 +384,14 @@ class BWTree {
 
     /// Set the (key,data) pair in slot. Overloaded function used by
     /// bulk_load().
-//    inline void set_slot(unsigned short slot, const PairType& value) {
-//      assert(slot < Node::slotuse);
-//      slotkey[slot] = value.first;
-//      if (slotdata[slot] == nullptr) {
-//        slotdata[slot] = new std::vector<ValueType>();
-//      }
-//      slotdata[slot]->push_back(value.second);
-//    }
+    //    inline void set_slot(unsigned short slot, const PairType& value) {
+    //      assert(slot < Node::slotuse);
+    //      slotkey[slot] = value.first;
+    //      if (slotdata[slot] == nullptr) {
+    //        slotdata[slot] = new std::vector<ValueType>();
+    //      }
+    //      slotdata[slot]->push_back(value.second);
+    //    }
 
     /// Set the key pair in slot. Overloaded function used by
     /// bulk_load().
@@ -489,9 +498,7 @@ class BWTree {
   }
 
   // destructor
-  ~BWTree() {
-    mapping_table.~MappingTable();
-  };
+  ~BWTree() { mapping_table.~MappingTable(); };
 
   /*
    ************************************************
@@ -554,6 +561,9 @@ class BWTree {
       return empty_res;
     }
 
+    if (path.empty() || path.top() != 0) {
+      printf("wrong search pid !\n");
+    }
     return path;
   }
 
@@ -665,7 +675,7 @@ class BWTree {
     }
   }
 
-  typedef std::unordered_set<ValueType, std::hash<ValueType>,
+  typedef std::unordered_set<ValueType, std::HashPair,
                              ItemPointerEqualityChecker> DelSet;
 
   bool key_is_in(KeyType key, Node* listhead, DelSet& deleted) {
@@ -733,23 +743,25 @@ class BWTree {
     while (node != nullptr) {
       switch (node->node_type) {
         case RECORD_DELTA: {
-          RecordDelta* rcd_node = (RecordDelta*)node;
-          if (rcd_node->op_type == RecordDelta::INSERT &&
-              key_equal(rcd_node->key, key) &&
-              (!deleted.count(rcd_node->value))) {
-            total_count++;
-            if (value_equal(rcd_node->value, value)) {
-              pair_count++;
+          // TODO : this part is buggy!
+          RecordDelta* rcd_node = static_cast<RecordDelta*>(node);
+          if (rcd_node->op_type == RecordDelta::INSERT) {
+            if (key_equal(rcd_node->key, key) && (!deleted.count(rcd_node->value))){
+              total_count++;
+              if (value_equal(rcd_node->value, value)) {
+                pair_count++;
+              }
             }
           } else if (rcd_node->op_type == RecordDelta::DELETE &&
                      key_equal(rcd_node->key, key)) {
             deleted.insert(rcd_node->value);
           }
           node = node->next;
+          // TODO : this part is buggy!
           break;
         }
         case LEAF: {
-          LeafNode* lf_node = (LeafNode*)node;
+          LeafNode* lf_node = static_cast<LeafNode*>(node);
           for (int i = 0; i < (lf_node->slotuse); i++) {
             if (key_equal(lf_node->slotkey[i], key)) {
               for (ValueType v : *(lf_node->slotdata[i])) {
@@ -971,7 +983,6 @@ class BWTree {
       redo = false;
     }
 
-
     redo = true;
     while (redo) {
       // check whether we can insert duplicate key
@@ -995,6 +1006,7 @@ class BWTree {
       redo = !mapping_table.set(basic_pid, basic_node, new_delta);
       if (redo) {
         LOG_ERROR("NEED REDO");
+        printf("I-redo\n");
         delete new_delta;
         path = search(BWTree::root, key);
         if (path.empty()) {
@@ -1024,15 +1036,22 @@ class BWTree {
       path.pop();
 
       Node* basic_node = mapping_table.get(basic_pid);
+      printf("before count pair\n");
       auto tv_count_pair = count_pair(key, value, basic_node);
       if (!tv_count_pair.second) {
         LOG_INFO("DeleteEntry Not Exist");
         return false;
       }
 
-      bool deletekey = (tv_count_pair.second >= tv_count_pair.first);
+      if (tv_count_pair.second > tv_count_pair.first) {
+        printf("error!! count pair second > first\n");
+      }
 
+      bool deletekey = (tv_count_pair.second == tv_count_pair.first);
+
+      //      printf("before append_delete\n");
       redo = !append_delete(basic_node, key, value, deletekey);
+      //      printf("after append_delete\n");
     }
     // TODO:apend merge_delta
 

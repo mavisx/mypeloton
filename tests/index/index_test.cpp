@@ -21,6 +21,11 @@
 namespace peloton {
 namespace test {
 
+//#define BASIC_TEST
+//#define DELETE_TEST
+//#define MULTI_INSERT_TEST
+#define MY_MULTI_TEST
+
 //===--------------------------------------------------------------------===//
 // Index Tests
 //===--------------------------------------------------------------------===//
@@ -76,6 +81,7 @@ index::Index *BuildIndex() {
   return index;
 }
 
+#ifdef BASIC_TEST
 TEST(IndexTests, BasicTest) {
   auto pool = TestingHarness::GetInstance().GetTestingPool();
   std::vector<ItemPointer> locations;
@@ -106,6 +112,7 @@ TEST(IndexTests, BasicTest) {
 
   delete tuple_schema;
 }
+#endif
 
 // INSERT HELPER FUNCTION
 void InsertTest(index::Index *index, VarlenPool *pool, size_t scale_factor) {
@@ -225,6 +232,7 @@ void DeleteTest(index::Index *index, VarlenPool *pool, size_t scale_factor) {
   }
 }
 
+#ifdef DELETE_TEST
 TEST(IndexTests, DeleteTest) {
   auto pool = TestingHarness::GetInstance().GetTestingPool();
   std::vector<ItemPointer> locations;
@@ -264,7 +272,9 @@ TEST(IndexTests, DeleteTest) {
 
   delete tuple_schema;
 }
+#endif
 
+#ifdef MULTI_INSERT_TEST
 TEST(IndexTests, MultiThreadedInsertTest) {
   auto pool = TestingHarness::GetInstance().GetTestingPool();
   std::vector<ItemPointer> locations;
@@ -274,14 +284,14 @@ TEST(IndexTests, MultiThreadedInsertTest) {
 
   // Parallel Test
   size_t num_threads = 10;
-  size_t scale_factor = 20;
+  size_t scale_factor = 10;
   LaunchParallelTest(num_threads, InsertTest, index.get(), pool, scale_factor);
 
   locations = index->ScanAllKeys();
   if (index->HasUniqueKeys())
     EXPECT_EQ(locations.size(), 5);
   else
-    EXPECT_EQ(locations.size(), 9 * num_threads);
+    EXPECT_EQ(locations.size(), 9 * num_threads * scale_factor);
 
   std::unique_ptr<storage::Tuple> key1(new storage::Tuple(key_schema, true));
   std::unique_ptr<storage::Tuple> keynonce(
@@ -301,11 +311,58 @@ TEST(IndexTests, MultiThreadedInsertTest) {
     EXPECT_EQ(locations.size(), 1);
     EXPECT_EQ(locations[0].block, item1.block);
   } else {
-    EXPECT_EQ(locations.size(), 5 * num_threads * scale_factor);
+    EXPECT_EQ(locations.size(), 5 * num_threads);
   }
 
   delete tuple_schema;
 }
+#endif
+
+#ifdef MY_MULTI_TEST
+TEST(IndexTests, MyMultiThreadedTest) {
+  auto pool = TestingHarness::GetInstance().GetTestingPool();
+  std::vector<ItemPointer> locations;
+
+  // INDEX
+  std::unique_ptr<index::Index> index(BuildIndex());
+
+  // Parallel Test
+  size_t num_threads = 10;
+  size_t scale_factor = 5;
+  LaunchParallelTest(num_threads, InsertTest, index.get(), pool, scale_factor);
+  LaunchParallelTest(num_threads, DeleteTest, index.get(), pool, scale_factor);
+
+  locations = index->ScanAllKeys();
+  if (index->HasUniqueKeys())
+    EXPECT_EQ(locations.size(), num_threads * scale_factor);
+  else
+    EXPECT_EQ(locations.size(), 3 * num_threads * scale_factor);
+
+  std::unique_ptr<storage::Tuple> key1(new storage::Tuple(key_schema, true));
+  std::unique_ptr<storage::Tuple> key2(new storage::Tuple(key_schema, true));
+
+  key1->SetValue(0, ValueFactory::GetIntegerValue(100), pool);
+  key1->SetValue(1, ValueFactory::GetStringValue("b"), pool);
+  key2->SetValue(0, ValueFactory::GetIntegerValue(100), pool);
+  key2->SetValue(1, ValueFactory::GetStringValue("c"), pool);
+
+  locations = index->ScanKey(key1.get());
+  if (index->HasUniqueKeys()) {
+    EXPECT_EQ(locations.size(), 0);
+  } else {
+    EXPECT_EQ(locations.size(), 2 * num_threads);
+  }
+
+  locations = index->ScanKey(key2.get());
+  if (index->HasUniqueKeys()) {
+    EXPECT_EQ(locations.size(), num_threads);
+  } else {
+    EXPECT_EQ(locations.size(), num_threads);
+  }
+
+  delete tuple_schema;
+}
+#endif
 
 }  // End test namespace
 }  // End peloton namespace

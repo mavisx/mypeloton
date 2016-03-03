@@ -747,14 +747,18 @@ class BWTree {
           RecordDelta* rcd_node = static_cast<RecordDelta*>(node);
           if (rcd_node->op_type == RecordDelta::INSERT) {
             if (key_equal(rcd_node->key, key) && (!deleted.count(rcd_node->value))){
+              printf("count_pair before inserting!\n");
               total_count++;
               if (value_equal(rcd_node->value, value)) {
                 pair_count++;
               }
+              printf("count_pair after inserting!\n");
             }
           } else if (rcd_node->op_type == RecordDelta::DELETE &&
                      key_equal(rcd_node->key, key)) {
+            printf("count_pair before delete!\n");
             deleted.insert(rcd_node->value);
+            printf("count_pair after delete!\n");
           }
           node = node->next;
           // TODO : this part is buggy!

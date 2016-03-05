@@ -24,11 +24,11 @@
 #include "index.h"
 
 // in bytes
-#define BWTREE_NODE_SIZE 4096 * 10
+#define BWTREE_NODE_SIZE 4096
 
 #define BWTREE_MAX(a, b) ((a) < (b) ? (b) : (a))
 
-#define MAX_DELTA_CHAIN_LEN 16
+#define MAX_DELTA_CHAIN_LEN 8
 
 // in bits
 #define MAPPING_TABLE_SIZE_BITNUM 10
@@ -825,10 +825,13 @@ class BWTree {
               if (value_equal(rcd_node->value, value)) {
                 pair_count++;
               }
+              //              printf("count_pair after inserting!\n");
             }
           } else if (rcd_node->op_type == RecordDelta::DELETE &&
                      key_equal(rcd_node->key, key)) {
+            //            printf("count_pair before delete!\n");
             deleted.insert(rcd_node->value);
+            //            printf("count_pair after delete!\n");
           }
           node = node->next;
           // TODO : this part is buggy!

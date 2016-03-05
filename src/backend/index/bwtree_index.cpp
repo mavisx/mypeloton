@@ -47,7 +47,7 @@ bool BWTreeIndex<KeyType, ValueType, KeyComparator,
                                                   __attribute__((unused))
                                                   const ItemPointer location) {
   LOG_INFO("Entering InsertEntry");
-  printf("I-start\n");
+//  printf("I-start\n");
 
 #ifdef LOCK_DEBUG
   index_lock.WriteLock();
@@ -67,8 +67,8 @@ bool BWTreeIndex<KeyType, ValueType, KeyComparator,
 #ifdef LOCK_DEBUG
   index_lock.Unlock();
 #endif
-
-  printf("I-end\n");
+  LOG_INFO("Leaving InsertEntry");
+  //  printf("I-end\n");
   return ret;
 }
 
@@ -80,7 +80,7 @@ bool BWTreeIndex<KeyType, ValueType, KeyComparator,
                                                   __attribute__((unused))
                                                   const ItemPointer location) {
   LOG_INFO("Entering DeleteEntry");
-  printf("D-start\n");
+//  printf("D-start\n");
 
 #ifdef LOCK_DEBUG
   index_lock.WriteLock();
@@ -99,7 +99,8 @@ bool BWTreeIndex<KeyType, ValueType, KeyComparator,
   index_lock.Unlock();
 #endif
 
-  printf("D-end\n");
+  //  printf("D-end\n");
+  LOG_INFO("Leaving DeleteEntry");
   return ret;
 }
 
@@ -204,6 +205,13 @@ template <typename KeyType, typename ValueType, class KeyComparator,
 std::string BWTreeIndex<KeyType, ValueType, KeyComparator,
                         KeyEqualityChecker>::GetTypeName() const {
   return "BWTree";
+}
+
+template <typename KeyType, typename ValueType, class KeyComparator,
+          class KeyEqualityChecker>
+size_t BWTreeIndex<KeyType, ValueType, KeyComparator,
+                   KeyEqualityChecker>::GetMemoryFootprint() {
+  return 0;
 }
 
 // Explicit template instantiation

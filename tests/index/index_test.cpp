@@ -23,7 +23,8 @@ namespace test {
 
 //#define BASIC_TEST
 //#define DELETE_TEST
-//#define MULTI_INSERT_TEST
+//#define DELETE_TEST2
+#define MULTI_INSERT_TEST
 #define MY_MULTI_TEST
 
 //===--------------------------------------------------------------------===//
@@ -136,28 +137,7 @@ void InsertTest(index::Index *index, VarlenPool *pool, size_t scale_factor) {
     key3->SetValue(0, ValueFactory::GetIntegerValue(400 * scale_itr), pool);
     key3->SetValue(1, ValueFactory::GetStringValue("d"), pool);
     key4->SetValue(0, ValueFactory::GetIntegerValue(500 * scale_itr), pool);
-    key4->SetValue(1, ValueFactory::GetStringValue(
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"),
-                   pool);
+    key4->SetValue(1, ValueFactory::GetStringValue("e"), pool);
     keynonce->SetValue(0, ValueFactory::GetIntegerValue(1000 * scale_itr),
                        pool);
     keynonce->SetValue(1, ValueFactory::GetStringValue("f"), pool);
@@ -173,6 +153,7 @@ void InsertTest(index::Index *index, VarlenPool *pool, size_t scale_factor) {
     index->InsertEntry(key2.get(), item1);
     index->InsertEntry(key3.get(), item1);
     index->InsertEntry(key4.get(), item1);
+    LOG_INFO("--------------- next round insert ---------------");
   }
 }
 
@@ -196,28 +177,7 @@ void DeleteTest(index::Index *index, VarlenPool *pool, size_t scale_factor) {
     key3->SetValue(0, ValueFactory::GetIntegerValue(400 * scale_itr), pool);
     key3->SetValue(1, ValueFactory::GetStringValue("d"), pool);
     key4->SetValue(0, ValueFactory::GetIntegerValue(500 * scale_itr), pool);
-    key4->SetValue(1, ValueFactory::GetStringValue(
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"),
-                   pool);
+    key4->SetValue(1, ValueFactory::GetStringValue("e"), pool);
 
     // DELETE
     index->DeleteEntry(key0.get(), item0);
@@ -229,6 +189,29 @@ void DeleteTest(index::Index *index, VarlenPool *pool, size_t scale_factor) {
     index->DeleteEntry(key4.get(), item1);
     index->DeleteEntry(key4.get(), item1);
     index->DeleteEntry(key4.get(), item1);
+    LOG_INFO("--------------- next round delete ---------------");
+  }
+}
+
+// DELETE HELPER FUNCTION
+void DeleteTest2(index::Index *index, VarlenPool *pool, size_t scale_factor) {
+  // Loop based on scale factor
+  for (size_t scale_itr = 1; scale_itr <= scale_factor; scale_itr++) {
+    // Delete a bunch of keys based on scale itr
+    std::unique_ptr<storage::Tuple> key0(new storage::Tuple(key_schema, true));
+    std::unique_ptr<storage::Tuple> key1(new storage::Tuple(key_schema, true));
+
+    key0->SetValue(0, ValueFactory::GetIntegerValue(100 * scale_itr), pool);
+    key0->SetValue(1, ValueFactory::GetStringValue("a"), pool);
+    key1->SetValue(0, ValueFactory::GetIntegerValue(100 * scale_itr), pool);
+    key1->SetValue(1, ValueFactory::GetStringValue("b"), pool);
+
+    // DELETE
+    index->InsertEntry(key1.get(), item0);
+    index->InsertEntry(key1.get(), item1);
+    index->DeleteEntry(key1.get(), item0);
+    index->DeleteEntry(key1.get(), item1);
+    index->DeleteEntry(key1.get(), item1);
   }
 }
 
@@ -241,7 +224,7 @@ TEST(IndexTests, DeleteTest) {
   std::unique_ptr<index::Index> index(BuildIndex());
 
   // Single threaded test
-  size_t scale_factor = 1;
+  size_t scale_factor = 60;
   LaunchParallelTest(1, InsertTest, index.get(), pool, scale_factor);
   LaunchParallelTest(1, DeleteTest, index.get(), pool, scale_factor);
 
@@ -270,6 +253,31 @@ TEST(IndexTests, DeleteTest) {
   EXPECT_EQ(locations.size(), 1);
   EXPECT_EQ(locations[0].block, item1.block);
 
+  locations = index->ScanAllKeys();
+  if (index->HasUniqueKeys())
+    EXPECT_EQ(locations.size(), scale_factor);
+  else
+    EXPECT_EQ(locations.size(), 3 * scale_factor);
+
+  delete tuple_schema;
+}
+#endif
+
+#ifdef DELETE_TEST2
+TEST(IndexTests, DeleteTest2) {
+  auto pool = TestingHarness::GetInstance().GetTestingPool();
+  std::vector<ItemPointer> locations;
+
+  // INDEX
+  std::unique_ptr<index::Index> index(BuildIndex());
+
+  // Single threaded test
+  size_t scale_factor = 1;
+  LaunchParallelTest(1, DeleteTest2, index.get(), pool, scale_factor);
+
+  locations = index->ScanAllKeys();
+  EXPECT_EQ(locations.size(), 0);
+
   delete tuple_schema;
 }
 #endif
@@ -284,12 +292,12 @@ TEST(IndexTests, MultiThreadedInsertTest) {
 
   // Parallel Test
   size_t num_threads = 10;
-  size_t scale_factor = 10;
+  size_t scale_factor = 30;
   LaunchParallelTest(num_threads, InsertTest, index.get(), pool, scale_factor);
 
   locations = index->ScanAllKeys();
   if (index->HasUniqueKeys())
-    EXPECT_EQ(locations.size(), 5);
+    EXPECT_EQ(locations.size(), 5 * scale_factor);
   else
     EXPECT_EQ(locations.size(), 9 * num_threads * scale_factor);
 
@@ -328,7 +336,7 @@ TEST(IndexTests, MyMultiThreadedTest) {
 
   // Parallel Test
   size_t num_threads = 10;
-  size_t scale_factor = 5;
+  size_t scale_factor = 30;
   LaunchParallelTest(num_threads, InsertTest, index.get(), pool, scale_factor);
   LaunchParallelTest(num_threads, DeleteTest, index.get(), pool, scale_factor);
 

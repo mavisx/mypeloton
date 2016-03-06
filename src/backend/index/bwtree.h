@@ -1140,28 +1140,16 @@ class BWTree {
     // Step1: perform split if necessary
     split(key);
 
-    // search again to make sure we are inserting the right node
-    std::stack<PidType> path = search(BWTree::root, key);
-
-    PidType basic_pid = path.top();
-    path.pop();
-    Node* basic_node = mapping_table.get(basic_pid);
-
-    // Step2: Check whether we need to consolidate
-    if (basic_node->delta_list_len > MAX_DELTA_CHAIN_LEN) {
-      if (!consolidate(basic_pid) ) {
-        LOG_INFO("Fail consolidation");
-        print_node_info(basic_pid);
-        print_node_info(basic_node);
-      }
-      //      print_node_info(basic_pid);
-    }
-
-    basic_node = mapping_table.get(basic_pid);
-    // Step3: Add the insert record delta to current delta chain
+    // Step2: Add the insert record delta to current delta chain
     // update the basic_node before adding record delta
     bool redo = true;
     while (redo) {
+      std::stack<PidType> path = search(BWTree::root, key);
+
+      PidType basic_pid = path.top();
+      //Check whether we need to consolidate, also check split correctness
+      Node* basic_node = consolidate(basic_pid);
+
       bool key_dup = key_is_in(key, basic_node);
 
       // check whether we can insert duplicate key
@@ -1187,11 +1175,6 @@ class BWTree {
       if (redo) {
         LOG_INFO("CAS FAIL: redo add insert record");
         delete new_delta;
-        path = search(BWTree::root, key);
-
-        basic_pid = path.top();
-        path.pop();
-        basic_node = mapping_table.get(basic_pid);
       }
       LOG_INFO("success add a new insert record delta, current delta len = %lu",
                mapping_table.get(basic_pid)->delta_list_len);
@@ -1205,30 +1188,20 @@ class BWTree {
     // Step1: perform split if necessary
     split(key);
 
-    // search again to make sure we are deleting from the correct node
-    std::stack<PidType> path = search(BWTree::root, key);
-    PidType basic_pid = path.top();
-    path.pop();
-    Node* basic_node = mapping_table.get(basic_pid);
-
-    // Step2: Check whether we need to consolidate
-    if (basic_node->delta_list_len > MAX_DELTA_CHAIN_LEN) {
-      consolidate(basic_pid);
-      //      print_node_info(basic_pid);
-    }
-
-    basic_node = mapping_table.get(basic_pid);
     // Step3: Add the insert record delta to current delta chain
     // update the basic_node before adding record delta
     bool redo = true;
     // check and insert delete delta
     while (redo) {
+      // search again to make sure we are deleting from the correct node
       std::stack<PidType> path = search(root, key);
 
       PidType basic_pid = path.top();
       path.pop();
 
-      Node* basic_node = mapping_table.get(basic_pid);
+      // Check whether we need to consolidate
+      Node* basic_node = consolidate(basic_pid);
+      // print_node_info(basic_pid);
 
       auto tv_count_pair = count_pair(key, value, basic_node);
 
@@ -1257,86 +1230,101 @@ class BWTree {
     return true;
   };
 
-  bool consolidate(PidType pid) {
+  Node* consolidate(PidType pid) {
     Node* orinode = mapping_table.get(pid);
+    if(orinode->need_split()){
+      LOG_ERROR("From consolidate: invalid split check");
+      assert(0);
+    }
 
-    if (orinode->is_leaf) {
-      LOG_INFO("begin leaf consolidation!");
+    while(orinode->delta_list_len > MAX_DELTA_CHAIN_LEN){
+      if (orinode->is_leaf) {
+        LOG_INFO("begin leaf consolidation!");
 
-      // We need to consolidate a leaf node
-      LeafNode* new_leaf = new LeafNode(
-          mapping_table, orinode->next_leafnode, orinode->low_key,
-          orinode->high_key, orinode->inf_lowkey, orinode->inf_highkey);
+        // We need to consolidate a leaf node
+        LeafNode* new_leaf = new LeafNode(
+            mapping_table, orinode->next_leafnode, orinode->low_key,
+            orinode->high_key, orinode->inf_lowkey, orinode->inf_highkey);
 
-      auto res = leaf_fake_consolidate(orinode);
-      auto keys = res.first;
-      auto vals = res.second;
+        auto res = leaf_fake_consolidate(orinode);
+        auto keys = res.first;
+        auto vals = res.second;
 
-      if (keys.size() != vals.size() || keys.size() > leafslotmax) {
-        LOG_ERROR("wrong consolidated leaf key size!");
-        assert(keys.size() != vals.size());
-        assert(keys.size() > leafslotmax);
-      }
+        if (keys.size() != vals.size() || keys.size() > leafslotmax) {
+          LOG_ERROR("wrong consolidated leaf key size!");
+          assert(keys.size() != vals.size());
+          assert(keys.size() > leafslotmax);
+        }
 
-      for (int i = 0; i < keys.size(); i++) {
-        new_leaf->slotkey[i] = keys[i];
-        new_leaf->slotdata[i] = new std::vector<ValueType>(vals[i]);
-      }
-      new_leaf->slotuse = keys.size();
+        for (int i = 0; i < keys.size(); i++) {
+          new_leaf->slotkey[i] = keys[i];
+          new_leaf->slotdata[i] = new std::vector<ValueType>(vals[i]);
+        }
+        new_leaf->slotuse = keys.size();
 
-      // CAS replace the item with new leaf and throw old delta chain away
-      if (mapping_table.set(pid, orinode, new_leaf)) {
-        while (garbage_table.add(orinode) == NULL_PID)
-          ;
-        LOG_INFO("leaf consolidation finished!");
-        return true;
+        // CAS replace the item with new leaf and throw old delta chain away
+        if (mapping_table.set(pid, orinode, new_leaf)) {
+          while (garbage_table.add(orinode) == NULL_PID)
+            ;
+          LOG_INFO("leaf consolidation finished!");
+          return new_leaf;
+        } else {
+          print_node_info(orinode);
+          print_node_info(new_leaf);
+          delete new_leaf;
+          LOG_INFO(
+              "CAS FAIL: unnecessary consolidate, remove just created "
+                  "consolidated node");
+        }
       } else {
-        delete new_leaf;
-        LOG_INFO(
-            "CAS FAIL: unnecessary consolidate, remove just created "
-            "consolidated node");
-        return false;
-      }
-    } else {
-      LOG_INFO("begin inner consolidation!");
+        LOG_INFO("begin inner consolidation!");
 
-      // We need to consolidate an inner node
-      InnerNode* new_inner =
-          new InnerNode(mapping_table, orinode->low_key, orinode->high_key,
-                        orinode->inf_lowkey, orinode->inf_highkey);
+        // We need to consolidate an inner node
+        InnerNode* new_inner =
+            new InnerNode(mapping_table, orinode->low_key, orinode->high_key,
+                          orinode->inf_lowkey, orinode->inf_highkey);
 
-      auto res = inner_fake_consolidate(orinode);
-      auto keys = res.first;
-      auto childs = res.second;
+        auto res = inner_fake_consolidate(orinode);
+        auto keys = res.first;
+        auto childs = res.second;
 
-      if (keys.size() != childs.size() - 1 || keys.size() > innerslotmax) {
-        LOG_ERROR("wrong consolidated inner key size!");
-      }
+        if (keys.size() != childs.size() - 1 || keys.size() > innerslotmax) {
+          LOG_ERROR("wrong consolidated inner key size!");
+        }
 
-      int i;
-      for (i = 0; i < keys.size(); i++) {
-        new_inner->slotkey[i] = keys[i];
+        int i;
+        for (i = 0; i < keys.size(); i++) {
+          new_inner->slotkey[i] = keys[i];
+          new_inner->childid[i] = childs[i];
+        }
         new_inner->childid[i] = childs[i];
-      }
-      new_inner->childid[i] = childs[i];
-      new_inner->slotuse = keys.size();
+        new_inner->slotuse = keys.size();
 
-      // CAS replace the item with new leaf and throw old delta chain away
-      if (mapping_table.set(pid, orinode, new_inner)) {
-        while (garbage_table.add(orinode) == NULL_PID)
-          ;
-        LOG_INFO("inner consolidation finished!");
-        return true;
-      } else {
-        delete new_inner;
-        LOG_INFO(
-            "CAS FAIL: unnecessary consolidate, remove just created "
-            "consolidated node");
-        return false;
+        // CAS replace the item with new leaf and throw old delta chain away
+        if (mapping_table.set(pid, orinode, new_inner)) {
+          while (garbage_table.add(orinode) == NULL_PID)
+            ;
+          LOG_INFO("inner consolidation finished!");
+          return new_inner;
+        } else {
+          delete new_inner;
+          LOG_INFO(
+              "CAS FAIL: unnecessary consolidate, remove just created "
+                  "consolidated node");
+        }
+      }
+      LOG_INFO("Fail consolidation");
+      assert(0);
+
+      orinode = mapping_table.get(pid);
+      if(orinode->need_split()){
+        LOG_ERROR("From consolidate: invalid split check");
+        assert(0);
       }
     }
 
-    return false;
+
+    return orinode;
   }
 
   std::pair<std::vector<KeyType>, std::vector<std::vector<ValueType>>>

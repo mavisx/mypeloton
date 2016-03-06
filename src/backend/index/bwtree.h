@@ -848,8 +848,8 @@ class BWTree {
           }
           if (node->next != nullptr) {
             LOG_ERROR("leaf.next != null");
+            assert(node->next == nullptr);
           }
-          assert(node->next == nullptr);
           node = nullptr;
           break;
         }
@@ -1277,8 +1277,7 @@ class BWTree {
 
       if (keys.size() != vals.size() || keys.size() > leafslotmax) {
         LOG_ERROR("wrong consolidated leaf key size!");
-        assert(keys.size() != vals.size());
-        assert(keys.size() > leafslotmax);
+        assert(keys.size() == vals.size() && keys.size() <= leafslotmax);
       }
 
       for (int i = 0; i < keys.size(); i++) {
@@ -1359,8 +1358,8 @@ class BWTree {
     // the first node must be the original leaf node itself
     if (delta_chain.top()->node_type != LEAF) {
       LOG_ERROR("delta chain top not LEAF");
+      assert(delta_chain.top()->node_type == LEAF);
     }
-    assert(delta_chain.top()->node_type == LEAF);
 
     LeafNode* orig_leaf_node = static_cast<LeafNode*>(delta_chain.top());
     delta_chain.pop();
@@ -1417,8 +1416,8 @@ class BWTree {
                 printf("tmpvals.size() = %lu\n", tmpvals.size());
                 print_node_info(recordDelta);
                 LOG_ERROR("tmpvals.size() != recordDelta->slotuse");
+                assert(tmpvals.size() == recordDelta->slotuse);
               }
-              assert(tmpvals.size() == recordDelta->slotuse);
             }  // end of RecordDelta::INSERT
 
           } else if (recordDelta->op_type == RecordDelta::DELETE) {
@@ -1443,8 +1442,8 @@ class BWTree {
               printf("tmpvals.size() = %lu\n", tmpvals.size());
               print_node_info(recordDelta);
               LOG_ERROR("tmpvals.size() != recordDelta->slotuse");
+              assert(tmpvals.size() == recordDelta->slotuse);
             }
-            assert(tmpvals.size() == recordDelta->slotuse);
           }
           break;
         }

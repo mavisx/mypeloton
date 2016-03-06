@@ -846,6 +846,9 @@ class BWTree {
               break;
             }
           }
+          if (node->next != nullptr) {
+            LOG_ERROR("leaf.next != null");
+          }
           assert(node->next == nullptr);
           node = nullptr;
           break;
@@ -1465,6 +1468,9 @@ class BWTree {
     std::vector<std::vector<ValueType>> tmpvals;
 
     // the first node must be the original leaf node itself
+    if (delta_chain.top()->node_type != LEAF) {
+      LOG_ERROR("delta chain top not LEAF");
+    }
     assert(delta_chain.top()->node_type == LEAF);
 
     LeafNode* orig_leaf_node = static_cast<LeafNode*>(delta_chain.top());
@@ -1517,6 +1523,12 @@ class BWTree {
                 tmpvals.insert(tmpvals.begin() + target_pos,
                                std::vector<ValueType>(1, recordDelta->value));
               }
+
+              if (tmpvals.size() != recordDelta->slotuse) {
+                printf("tmpvals.size() = %lu\n", tmpvals.size());
+                print_node_info(recordDelta);
+                LOG_ERROR("tmpvals.size() != recordDelta->slotuse");
+              }
               assert(tmpvals.size() == recordDelta->slotuse);
             }  // end of RecordDelta::INSERT
 
@@ -1537,6 +1549,11 @@ class BWTree {
                 }
                 break;
               }
+            }
+            if (tmpvals.size() != recordDelta->slotuse) {
+              printf("tmpvals.size() = %lu\n", tmpvals.size());
+              print_node_info(recordDelta);
+              LOG_ERROR("tmpvals.size() != recordDelta->slotuse");
             }
             assert(tmpvals.size() == recordDelta->slotuse);
           }

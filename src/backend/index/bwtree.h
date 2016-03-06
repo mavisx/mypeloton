@@ -1232,8 +1232,10 @@ class BWTree {
 
   Node* consolidate(PidType pid) {
     Node* orinode = mapping_table.get(pid);
+
+    //check the correctness of previous split
     if(orinode->need_split()){
-      LOG_ERROR("From consolidate: invalid split check");
+      LOG_ERROR("From consolidate: invalid prevous split");
       assert(0);
     }
 

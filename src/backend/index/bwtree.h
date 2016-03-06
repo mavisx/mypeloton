@@ -23,6 +23,8 @@
 #include "../storage/tuple.h"
 #include "index.h"
 
+//#define MY_PRINT_DEBUG
+
 // in bytes
 #define BWTREE_NODE_SIZE 4096
 
@@ -159,8 +161,6 @@ class BWTree {
           mappingtable_1[i] = nullptr;
         }
       }
-
-      printf("end of destruct BWTree\n");
     }
 
     Node* get(PidType pid) {
@@ -541,10 +541,7 @@ class BWTree {
   }
 
   // destructor
-  ~BWTree() {
-    mapping_table.~MappingTable();
-    garbage_table.~MappingTable();
-  };
+  ~BWTree(){};
 
   /*
    ************************************************
@@ -1125,13 +1122,17 @@ class BWTree {
       if (check_split_node->is_leaf) {
         LOG_INFO("pid = %llu, Split finished, new leaf node %llu created",
                  check_split_pid, new_node_pid);
-        print_info(check_split_pid);
-        print_info(new_node_pid);
+#ifdef MY_PRINT_DEBUG
+        print_node_info(check_split_pid);
+        print_node_info(new_node_pid);
+#endif
       } else {
         LOG_INFO("pid = %llu, Split finished, new inner node %llu created",
                  check_split_pid, new_node_pid);
-        print_info(check_split_pid);
-        print_info(new_node_pid);
+#ifdef MY_PRINT_DEBUG
+        print_node_info(check_split_pid);
+        print_node_info(new_node_pid);
+#endif
       }
 
       check_split_node = mapping_table.get(check_split_pid);
@@ -1233,7 +1234,9 @@ class BWTree {
         consolidate(check_split_pid);
       }
 
-      print_info(check_split_pid);
+#ifdef MY_PRINT_DEBUG
+      print_node_info(check_split_pid);
+#endif
 
       // if now the path is empty and current node
       // doesn't need splitting we stop split
@@ -1258,7 +1261,7 @@ class BWTree {
     // Step2: Check whether we need to consolidate
     if (basic_node->delta_list_len > MAX_DELTA_CHAIN_LEN) {
       consolidate(basic_pid);
-      //      print_info(basic_pid);
+      //      print_node_info(basic_pid);
     }
 
     // Step3: Add the insert record delta to current delta chain
@@ -1291,7 +1294,6 @@ class BWTree {
       redo = !mapping_table.set(basic_pid, basic_node, new_delta);
       if (redo) {
         LOG_INFO("CAS FAIL: redo add insert record");
-        printf("I-redo\n");
         delete new_delta;
         path = search(BWTree::root, key);
 
@@ -1302,7 +1304,7 @@ class BWTree {
       LOG_INFO("success add a new insert record delta, current delta len = %lu",
                mapping_table.get(basic_pid)->delta_list_len);
     }
-    //    print_info(basic_pid);
+    //    print_node_info(basic_pid);
 
     //    basic_node = mapping_table.get(basic_pid);
     //    if (basic_node->slotuse >= 24 && basic_node->slotuse <= 26 ) {
@@ -1346,7 +1348,7 @@ class BWTree {
     // Step2: Check whether we need to consolidate
     if (basic_node->delta_list_len > MAX_DELTA_CHAIN_LEN) {
       consolidate(basic_pid);
-      //      print_info(basic_pid);
+      //      print_node_info(basic_pid);
     }
 
     // Step3: Add the insert record delta to current delta chain
@@ -1409,7 +1411,7 @@ class BWTree {
     }
     // TODO:apend merge_delta
     // TODO:apend delete_index_term_delta
-    //    print_info(basic_pid);
+    //    print_node_info(basic_pid);
     return true;
   };
 
@@ -1771,32 +1773,32 @@ class BWTree {
     }
   }
 
-  void print_info(PidType pid) {
+  void print_node_info(PidType pid) {
     Node* node = mapping_table.get(pid);
     size_t total_len = node->delta_list_len;
     printf("pid - %lld, delta_chain_len: %ld, slotuse: %d  ", pid, total_len,
            node->slotuse);
 
-    if (MAX_DELTA_CHAIN_LEN <= 3) {
-      for (int i = 0; i <= total_len; i++) {
-        if (node->delta_list_len != total_len - i) {
-          LOG_ERROR("Wrong delta chain length!");
-        }
-        if (node->node_type == RECORD_DELTA) {
-          if (((RecordDelta*)node)->op_type == RecordDelta::INSERT)
-            printf("insert->");
-          else if (((RecordDelta*)node)->op_type == RecordDelta::DELETE)
-            printf("delete->");
-        } else if (node->node_type == SPLIT_DELTA) {
-          printf("split(pQ=%llu)->", ((SplitDelta*)node)->pQ);
-        } else if (node->node_type == LEAF) {
-          printf("leaf");
-        } else if (node->node_type == INNER) {
-          printf("inner");
-        }
-        node = node->next;
+    // print out deltas added to this node in order
+    for (int i = 0; i <= total_len; i++) {
+      if (node->delta_list_len != total_len - i) {
+        LOG_ERROR("Wrong delta chain length!");
       }
+      if (node->node_type == RECORD_DELTA) {
+        if (((RecordDelta*)node)->op_type == RecordDelta::INSERT)
+          printf("insert->");
+        else if (((RecordDelta*)node)->op_type == RecordDelta::DELETE)
+          printf("delete->");
+      } else if (node->node_type == SPLIT_DELTA) {
+        printf("split(pQ=%llu)->", ((SplitDelta*)node)->pQ);
+      } else if (node->node_type == LEAF) {
+        printf("leaf");
+      } else if (node->node_type == INNER) {
+        printf("inner");
+      }
+      node = node->next;
     }
+
     printf("\n");
   }
 };

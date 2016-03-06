@@ -47,7 +47,10 @@ bool BWTreeIndex<KeyType, ValueType, KeyComparator,
                                                   __attribute__((unused))
                                                   const ItemPointer location) {
   LOG_INFO("Entering InsertEntry");
+
+#ifdef MY_DEBUG
 //  printf("I-start\n");
+#endif
 
 #ifdef LOCK_DEBUG
   index_lock.WriteLock();
@@ -60,15 +63,14 @@ bool BWTreeIndex<KeyType, ValueType, KeyComparator,
 
   bool ret = container.insert_entry(key_pair.first, key_pair.second);
 
-#ifdef MY_DEBUG
-  container.print_info(0);
-#endif
-
 #ifdef LOCK_DEBUG
   index_lock.Unlock();
 #endif
   LOG_INFO("Leaving InsertEntry");
-  //  printf("I-end\n");
+
+#ifdef MY_DEBUG
+  printf("I-end\n");
+#endif
   return ret;
 }
 
@@ -80,7 +82,9 @@ bool BWTreeIndex<KeyType, ValueType, KeyComparator,
                                                   __attribute__((unused))
                                                   const ItemPointer location) {
   LOG_INFO("Entering DeleteEntry");
-//  printf("D-start\n");
+#ifdef MY_DEBUG
+  printf("D-start\n");
+#endif
 
 #ifdef LOCK_DEBUG
   index_lock.WriteLock();
@@ -99,7 +103,9 @@ bool BWTreeIndex<KeyType, ValueType, KeyComparator,
   index_lock.Unlock();
 #endif
 
-  //  printf("D-end\n");
+#ifdef MY_DEBUG
+  printf("D-end\n");
+#endif
   LOG_INFO("Leaving DeleteEntry");
   return ret;
 }
@@ -112,7 +118,9 @@ BWTreeIndex<KeyType, ValueType, KeyComparator, KeyEqualityChecker>::Scan(
     __attribute__((unused)) const std::vector<oid_t> &key_column_ids,
     __attribute__((unused)) const std::vector<ExpressionType> &expr_types,
     __attribute__((unused)) const ScanDirectionType &scan_direction) {
+#ifdef MY_DEBUG
   printf("Scan-start\n");
+#endif
 
   std::vector<KeyType> keys_result;
   std::vector<std::vector<ItemPointer>> values_result;
@@ -150,7 +158,10 @@ BWTreeIndex<KeyType, ValueType, KeyComparator, KeyEqualityChecker>::Scan(
 #ifdef LOCK_DEBUG
   index_lock.Unlock();
 #endif
+
+#ifdef MY_DEBUG
   printf("Scan-end\n");
+#endif
   return result;
 }
 
@@ -159,7 +170,9 @@ template <typename KeyType, typename ValueType, class KeyComparator,
 std::vector<ItemPointer> BWTreeIndex<KeyType, ValueType, KeyComparator,
                                      KeyEqualityChecker>::ScanAllKeys() {
   LOG_INFO("Entering ScanAllKeys");
+#ifdef MY_DEBUG
   printf("ScanAll-start\n");
+#endif
   std::vector<ItemPointer> result;
 
 #ifdef LOCK_DEBUG
@@ -171,7 +184,10 @@ std::vector<ItemPointer> BWTreeIndex<KeyType, ValueType, KeyComparator,
 #ifdef LOCK_DEBUG
   index_lock.Unlock();
 #endif
+
+#ifdef MY_DEBUG
   printf("ScanAll-end\n");
+#endif
   return result;
 }
 
@@ -184,7 +200,11 @@ std::vector<ItemPointer>
 BWTreeIndex<KeyType, ValueType, KeyComparator, KeyEqualityChecker>::ScanKey(
     __attribute__((unused)) const storage::Tuple *key) {
   LOG_INFO("Entering ScanKey");
+
+#ifdef MY_DEBUG
   printf("ScanKey-start\n");
+#endif
+
 #ifdef LOCK_DEBUG
   index_lock.ReadLock();
 #endif
@@ -196,7 +216,10 @@ BWTreeIndex<KeyType, ValueType, KeyComparator, KeyEqualityChecker>::ScanKey(
 #ifdef LOCK_DEBUG
   index_lock.Unlock();
 #endif
+
+#ifdef MY_DEBUG
   printf("ScanKey-end\n");
+#endif
   return result;
 }
 

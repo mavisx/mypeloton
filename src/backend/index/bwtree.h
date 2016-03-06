@@ -529,7 +529,7 @@ class BWTree {
         new LeafNode(mapping_table, NULL_PID, waste, waste, true, true);
     long newpid = mapping_table.add(addr);
     if (newpid >= 0) {
-      // initialize the root, head and tail pid.
+      // initialize the root, and tail pid.
       root = newpid;
       headleaf = tailleaf = newpid;
     } else {
@@ -1314,13 +1314,13 @@ class BWTree {
         }
       }
       LOG_INFO("Fail consolidation");
-      assert(0);
-
       orinode = mapping_table.get(pid);
       if(orinode->need_split()){
         LOG_ERROR("From consolidate: invalid split check");
         assert(0);
       }
+      //TODO: delete this break and let the loop work
+      break;
     }
 
 

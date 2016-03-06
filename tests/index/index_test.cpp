@@ -24,7 +24,7 @@ namespace test {
 //#define BASIC_TEST
 //#define DELETE_TEST
 //#define DELETE_TEST2
-#define MULTI_INSERT_TEST
+//#define MULTI_INSERT_TEST
 #define MY_MULTI_TEST
 
 //===--------------------------------------------------------------------===//
@@ -182,7 +182,7 @@ void DeleteTest(index::Index *index, VarlenPool *pool, size_t scale_factor) {
     // DELETE
     index->DeleteEntry(key0.get(), item0);
     index->DeleteEntry(key1.get(), item1);
-    index->DeleteEntry(key2.get(), item2);
+//    index->DeleteEntry(key2.get(), item2);
     index->DeleteEntry(key3.get(), item1);
     index->DeleteEntry(key3.get(), item1);
     index->DeleteEntry(key3.get(), item1);
@@ -224,7 +224,7 @@ TEST(IndexTests, DeleteTest) {
   std::unique_ptr<index::Index> index(BuildIndex());
 
   // Single threaded test
-  size_t scale_factor = 60;
+  size_t scale_factor = 100;
   LaunchParallelTest(1, InsertTest, index.get(), pool, scale_factor);
   LaunchParallelTest(1, DeleteTest, index.get(), pool, scale_factor);
 
@@ -335,7 +335,7 @@ TEST(IndexTests, MyMultiThreadedTest) {
   std::unique_ptr<index::Index> index(BuildIndex());
 
   // Parallel Test
-  size_t num_threads = 10;
+  size_t num_threads = 15;
   size_t scale_factor = 30;
   LaunchParallelTest(num_threads, InsertTest, index.get(), pool, scale_factor);
   LaunchParallelTest(num_threads, DeleteTest, index.get(), pool, scale_factor);

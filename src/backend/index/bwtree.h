@@ -1270,11 +1270,12 @@ class BWTree {
 
     bool redo = true;
     while (redo) {
+      bool key_dup = key_is_in(key, basic_node);
+
       // check whether we can insert duplicate key
       if (m_metadata->HasUniqueKeys()) {
         LOG_INFO("unique key required!");
-        auto count_res = count_pair(key, value, basic_node);
-        if (count_res.first > 0) return false;
+        if (key_dup) return false;
       }
 
       RecordDelta* new_delta = new RecordDelta(
@@ -1283,14 +1284,13 @@ class BWTree {
           basic_node->inf_lowkey, basic_node->inf_highkey);
 
       new_delta->pid = basic_pid;
-      if (!key_is_in(key, new_delta->next))
+      if (!key_dup)
         new_delta->slotuse = new_delta->next->slotuse + 1;
 
       basic_node = mapping_table.get(basic_pid);
       new_delta->high_key = basic_node->high_key;
       new_delta->low_key = basic_node->low_key;
 
-      // TODO: use CAS concatenate this new_delta to the delta chain
       redo = !mapping_table.set(basic_pid, basic_node, new_delta);
       if (redo) {
         LOG_INFO("CAS FAIL: redo add insert record");
@@ -1522,7 +1522,6 @@ class BWTree {
 
     LOG_INFO("Consolidate: delta_chain.len = %lu", delta_chain.size());
 
-    //    int c = 0;
     // traverse the delta chain
     while (!delta_chain.empty()) {
       // get top delta node
@@ -1542,14 +1541,6 @@ class BWTree {
                 break;
               }
             }
-
-            //            LOG_INFO("insert %d", ++c);
-            //            std::cout <<
-            //            recordDelta->key.GetTupleForComparison(m_metadata->GetKeySchema()).GetValue(0)
-            //            << " "
-            //                <<
-            //                recordDelta->key.GetTupleForComparison(m_metadata->GetKeySchema()).GetValue(1)
-            //                << std::endl;
 
             // key not exists, need to insert somewhere
             if (no_key) {
@@ -1771,6 +1762,12 @@ class BWTree {
 
       node = mapping_table.get(node->next_leafnode);
     }
+  }
+
+  void print_key_info(KeyType& key) {
+    std::count << key.GetTupleForComparison(m_metadata->GetKeySchema()).GetValue(0)
+      << "," << key.GetTupleForComparison(m_metadata->GetKeySchema()).GetValue(1)
+      << std::endl;
   }
 
   void print_node_info(PidType pid) {

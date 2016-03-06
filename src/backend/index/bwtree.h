@@ -1009,97 +1009,17 @@ class BWTree {
       SplitDelta* new_split;
       KeyType pivotal;
 
-      //      std::vector<catalog::Column> columns;
-      //      catalog::Column column1(VALUE_TYPE_INTEGER,
-      //      GetTypeSize(VALUE_TYPE_INTEGER),
-      //                              "A", true);
-      //      catalog::Column column2(VALUE_TYPE_VARCHAR, 1024, "B", true);
-      //      columns.push_back(column1);
-      //      columns.push_back(column2);
-      //      // INDEX KEY SCHEMA -- {column1, column2}
-      //      catalog::Schema *key_schema = new catalog::Schema(columns);
-      //      key_schema->SetIndexedColumns({0, 1});
-      //      storage::Tuple * tp = (new storage::Tuple(key_schema, true));
-      //      tp->SetValue(0, ValueFactory::GetIntegerValue(2500), nullptr);
-      //      tp->SetValue(1, ValueFactory::GetStringValue("e"), nullptr);
-      //      KeyType key4;
-      //      key4.SetFromKey(tp);
-      //
-      //      ItemPointer item1(121, 7);
-      //
-      //
-      //      Node * basic_node = check_split_node;
-      //      {
-      //        printf("check if 2500, e - item1  in original node:\n");
-      //        auto res = leaf_fake_consolidate(basic_node);
-      //        auto keys = res.first;
-      //        auto vals = res.second;
-      //        int count = 0;
-      //        int ck = 0;
-      //        for (int i=0; i < keys.size(); i++) {
-      //          if (key_equal(keys[i], key4)) {
-      //            ck = vals[i].size();
-      //            for (int j=0; j<ck; j++) {
-      //              if (value_equal(vals[i][j], item1)) {
-      //                count ++;
-      //              }
-      //            }
-      //            break;
-      //          }
-      //        }
-      //        printf("k-v pair found by my sanity: %d, %d\n", ck, count);
-      //      }
 
       // create a new right sibling node
       PidType new_node_pid;
 
       if (check_split_node->is_leaf)
-        new_node_pid = create_leaf(check_split_pid, &pivotal);
+        new_node_pid = create_leaf(check_split_node, &pivotal);
       else
-        new_node_pid = create_inner(check_split_pid, &pivotal);
+        new_node_pid = create_inner(check_split_node, &pivotal);
 
       Node* new_node = mapping_table.get(new_node_pid);
 
-      //      basic_node = new_node;
-      //      {
-      //        std::cout << "pivaotal: " <<
-      //            pivotal.GetTupleForComparison(m_metadata->GetKeySchema()).GetValue(0)
-      //            << "," <<
-      //            pivotal.GetTupleForComparison(m_metadata->GetKeySchema()).GetValue(1)
-      //            << std::endl;
-      //
-      //        printf("check if 2500, e - item1 in new leaf node: \n");
-      //        std::cout << "new leaf lowkey: " <<
-      //            basic_node->low_key.GetTupleForComparison(m_metadata->GetKeySchema()).GetValue(0)
-      //            << "," <<
-      //            basic_node->low_key.GetTupleForComparison(m_metadata->GetKeySchema()).GetValue(1)
-      //            << std::endl;
-      //
-      //        auto res = leaf_fake_consolidate(basic_node);
-      //        auto keys = res.first;
-      //
-      //        std::cout << "new leaf key[0]: " <<
-      //            keys[0].GetTupleForComparison(m_metadata->GetKeySchema()).GetValue(0)
-      //            << "," <<
-      //            keys[0].GetTupleForComparison(m_metadata->GetKeySchema()).GetValue(1)
-      //            << std::endl;
-      //
-      //        auto vals = res.second;
-      //        int count = 0;
-      //        int ck = 0;
-      //        for (int i=0; i < keys.size(); i++) {
-      //          if (key_equal(keys[i], key4)) {
-      //            ck = vals[i].size();
-      //            for (int j=0; j<ck; j++) {
-      //              if (value_equal(vals[i][j], item1)) {
-      //                count ++;
-      //              }
-      //            }
-      //            break;
-      //          }
-      //        }
-      //        printf("k-v pair found by my sanity: %d, %d\n", ck, count);
-      //      }
 
       // create and prepend a split node
       new_split = new SplitDelta(check_split_node, pivotal, new_node_pid,
@@ -1112,7 +1032,10 @@ class BWTree {
         // clean created waste
         Node* old_ptr = mapping_table.get(new_node_pid);
         delete old_ptr;
-        mapping_table.set(new_node_pid, old_ptr, nullptr);
+        if(!mapping_table.set(new_node_pid, old_ptr, nullptr)){
+          LOG_ERROR("In split, delete node before retry fail!");
+          assert(0);
+        }
         delete new_split;
 
         check_split_node = mapping_table.get(check_split_pid);
@@ -1141,42 +1064,6 @@ class BWTree {
         consolidate(check_split_pid);
       }
 
-      //      basic_node = check_split_node;
-      //      {
-      //        printf("check if 2500, e - item1  in new original node:\n");
-      //        std::cout << "new original highkey: " <<
-      //            basic_node->high_key.GetTupleForComparison(m_metadata->GetKeySchema()).GetValue(0)
-      //            << "," <<
-      //            basic_node->high_key.GetTupleForComparison(m_metadata->GetKeySchema()).GetValue(1)
-      //            << std::endl;
-      //
-      //        auto res = leaf_fake_consolidate(basic_node);
-      //        auto keys = res.first;
-      //
-      //        std::cout << "new original key[slotuse-1]: " <<
-      //            keys[keys.size()-1].GetTupleForComparison(m_metadata->GetKeySchema()).GetValue(0)
-      //            << "," <<
-      //            keys[keys.size()-1].GetTupleForComparison(m_metadata->GetKeySchema()).GetValue(1)
-      //            << std::endl;
-      //
-      //        auto vals = res.second;
-      //        int count = 0;
-      //        int ck = 0;
-      //        for (int i=0; i < keys.size(); i++) {
-      //          if (key_equal(keys[i], key4)) {
-      //            ck = vals[i].size();
-      //            for (int j=0; j<ck; j++) {
-      //              if (value_equal(vals[i][j], item1)) {
-      //                count ++;
-      //              }
-      //            }
-      //            break;
-      //          }
-      //        }
-      //        printf("k-v pair found by my sanity: %d, %d\n", ck, count);
-      //      }
-      //      delete key_schema;
-      //      delete tp;
 
       // Step 1.2 update our check_split_node as its parent (or create new root)
       if (path.empty()) {
@@ -1432,6 +1319,8 @@ class BWTree {
 
       if (keys.size() != vals.size() || keys.size() > leafslotmax) {
         LOG_ERROR("wrong consolidated leaf key size!");
+        assert(keys.size() != vals.size());
+        assert(keys.size() > leafslotmax);
       }
 
       for (int i = 0; i < keys.size(); i++) {
@@ -1682,8 +1571,7 @@ class BWTree {
     return std::make_pair(tmpkeys, tmpchilds);
   }
 
-  PidType create_leaf(PidType check_split_pid, KeyType* pivotal) {
-    Node* check_split_node = mapping_table.get(check_split_pid);
+  PidType create_leaf(Node* check_split_node, KeyType* pivotal) {
     KeyType waste;
     LeafNode* new_leaf = new LeafNode(
         mapping_table, check_split_node->next_leafnode, waste,
@@ -1706,8 +1594,7 @@ class BWTree {
     return new_leaf_pid;
   }
 
-  PidType create_inner(PidType check_split_pid, KeyType* pivotal) {
-    Node* check_split_node = mapping_table.get(check_split_pid);
+  PidType create_inner(Node* check_split_node, KeyType* pivotal) {
     KeyType waste;
     InnerNode* new_inner =
         new InnerNode(mapping_table, waste, check_split_node->high_key, false,

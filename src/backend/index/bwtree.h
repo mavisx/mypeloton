@@ -628,13 +628,13 @@ class BWTree {
     switch (node->node_type) {
       case LEAF:
       case RECORD_DELTA: {
-        if (node->node_type == LEAF) {
-          LOG_INFO("Search Range Info: meet a leaf, pid: %lld, slotuse %d",
-                   node->pid, node->slotuse);
-        } else {
-          LOG_INFO("Search Range Info: meet a record, pid: %lld, slotuse %d",
-                   node->pid, node->slotuse);
-        }
+//        if (node->node_type == LEAF) {
+//          LOG_INFO("Search Range Info: meet a leaf, pid: %lld, slotuse %d",
+//                   node->pid, node->slotuse);
+//        } else {
+//          LOG_INFO("Search Range Info: meet a record, pid: %lld, slotuse %d",
+//                   node->pid, node->slotuse);
+//        }
 
         return node->pid;
       }
@@ -656,7 +656,7 @@ class BWTree {
         return search(node->next, key, path);
       }
       case REMOVE_NODE_DELTA: {
-        LOG_INFO("Search Range Info: meet a removed node");
+//        LOG_INFO("Search Range Info: meet a removed node");
 
         path.pop();
         if (path.empty()) {
@@ -674,7 +674,7 @@ class BWTree {
         }
       }
       case MERGE_DELTA: {
-        LOG_INFO("Search Range Info: meet merge delta");
+//        LOG_INFO("Search Range Info: meet merge delta");
 
         if (key_greaterequal(key, ((MergeDelta*)node)->Kp, false)) {
           node = ((MergeDelta*)node)->orignal_node;
@@ -688,7 +688,7 @@ class BWTree {
         return search(node->next, key, path);
       }
       case SPLIT_DELTA: {
-        LOG_INFO("Search Range Info: meet split/merge delta");
+//        LOG_INFO("Search Range Info: meet split/merge delta");
         pid = ((SplitDelta*)node)->pQ;
         if (key_greaterequal(key, ((SplitDelta*)node)->Kp, false)) {
           // TODO: should
@@ -706,7 +706,7 @@ class BWTree {
       }
       case INNER: {
         if (node->slotuse == 0) {
-          LOG_INFO("empty inner node");
+//          LOG_INFO("empty inner node");
           pid = ((InnerNode*)node)->childid[0];
           if (pid == NULL_PID) {
             LOG_ERROR("error leftmost pid -- NULL_PID");
@@ -1060,7 +1060,7 @@ class BWTree {
 
       check_split_node = mapping_table.get(check_split_pid);
       // check if we need to consolidate
-      if (check_split_node->delta_list_len > MERGE_DELTA) {
+      if (check_split_node->delta_list_len > MAX_DELTA_CHAIN_LEN) {
         consolidate(check_split_pid);
       }
 
@@ -1085,10 +1085,11 @@ class BWTree {
 
       check_split_node = mapping_table.get(check_split_pid);
       // check if we need to consolidate
-      if (check_split_node->delta_list_len > MERGE_DELTA) {
+      if (check_split_node->delta_list_len > MAX_DELTA_CHAIN_LEN) {
         consolidate(check_split_pid);
       }
 
+      check_split_node = mapping_table.get(check_split_pid);
       // Step 1.3 add indexEntryDelta to current check_split_node
       bool redo = true;
       while (redo) {
@@ -1117,10 +1118,11 @@ class BWTree {
       }
       check_split_node = mapping_table.get(check_split_pid);
       // check if we need to consolidate
-      if (check_split_node->delta_list_len > MERGE_DELTA) {
+      if (check_split_node->delta_list_len > MAX_DELTA_CHAIN_LEN) {
         consolidate(check_split_pid);
       }
 
+      check_split_node = mapping_table.get(check_split_pid);
 #ifdef MY_PRINT_DEBUG
       print_node_info(check_split_pid);
 #endif
@@ -1147,14 +1149,17 @@ class BWTree {
 
     // Step2: Check whether we need to consolidate
     if (basic_node->delta_list_len > MAX_DELTA_CHAIN_LEN) {
-      consolidate(basic_pid);
+      if (!consolidate(basic_pid) ) {
+        LOG_INFO("Fail consolidation");
+        print_node_info(basic_pid);
+        print_node_info(basic_node);
+      }
       //      print_node_info(basic_pid);
     }
 
+    basic_node = mapping_table.get(basic_pid);
     // Step3: Add the insert record delta to current delta chain
     // update the basic_node before adding record delta
-    basic_node = mapping_table.get(basic_pid);
-
     bool redo = true;
     while (redo) {
       bool key_dup = key_is_in(key, basic_node);
@@ -1193,32 +1198,6 @@ class BWTree {
     }
     //    print_node_info(basic_pid);
 
-    //    basic_node = mapping_table.get(basic_pid);
-    //    if (basic_node->slotuse >= 24 && basic_node->slotuse <= 26 ) {
-    //      std::cout << "inserted: " <<
-    //      key.GetTupleForComparison(m_metadata->GetKeySchema()).GetValue(0)
-    //          << "," <<
-    //          key.GetTupleForComparison(m_metadata->GetKeySchema()).GetValue(1)
-    //          << " " << value.block << "," << value.offset << " " <<
-    //          std::endl;
-    //      auto res = leaf_fake_consolidate(basic_node);
-    //      auto keys = res.first;
-    //      auto vals = res.second;
-    //      int count = 0;
-    //      int ck = 0;
-    //      for (int i=0; i < keys.size(); i++) {
-    //        if (key_equal(keys[i], key)) {
-    //          ck = vals[i].size();
-    //          for (int j=0; j<vals.size(); j++) {
-    //            if (value_equal(vals[i][j], value)) {
-    //              count ++;
-    //            }
-    //          }
-    //          break;
-    //        }
-    //      }
-    //      printf("k-v pair found by my sanity: %d, %d\n", ck, count);
-    //    }
     return true;
   }
 
@@ -1238,6 +1217,7 @@ class BWTree {
       //      print_node_info(basic_pid);
     }
 
+    basic_node = mapping_table.get(basic_pid);
     // Step3: Add the insert record delta to current delta chain
     // update the basic_node before adding record delta
     bool redo = true;
@@ -1249,32 +1229,7 @@ class BWTree {
       path.pop();
 
       Node* basic_node = mapping_table.get(basic_pid);
-      //      printf("before count pair in pid = %llu\n", basic_pid);
-      //      if (basic_node->slotuse == 59) {
-      //          std::cout << "want to delete: " <<
-      //          key.GetTupleForComparison(m_metadata->GetKeySchema()).GetValue(0)
-      //          << "," <<
-      //          key.GetTupleForComparison(m_metadata->GetKeySchema()).GetValue(1)
-      //              << " " << value.block << "," << value.offset << " " <<
-      //              std::endl;
-      //          auto res = leaf_fake_consolidate(basic_node);
-      //          auto keys = res.first;
-      //          auto vals = res.second;
-      //          int count = 0;
-      //          int ck = 0;
-      //          for (int i=0; i < keys.size(); i++) {
-      //            if (key_equal(keys[i], key)) {
-      //              ck = vals[i].size();
-      //              for (int j=0; j<vals.size(); j++) {
-      //                if (value_equal(vals[i][j], value)) {
-      //                  count ++;
-      //                }
-      //              }
-      //              break;
-      //            }
-      //          }
-      //          printf("k-v pair found by my sanity: %d, %d\n", ck, count);
-      //      }
+
       auto tv_count_pair = count_pair(key, value, basic_node);
 
       //      if (basic_node->slotuse == 59)
@@ -1305,9 +1260,9 @@ class BWTree {
   bool consolidate(PidType pid) {
     Node* orinode = mapping_table.get(pid);
 
-    LOG_INFO("begin consolidation!");
-
     if (orinode->is_leaf) {
+      LOG_INFO("begin leaf consolidation!");
+
       // We need to consolidate a leaf node
       LeafNode* new_leaf = new LeafNode(
           mapping_table, orinode->next_leafnode, orinode->low_key,
@@ -1343,6 +1298,8 @@ class BWTree {
         return false;
       }
     } else {
+      LOG_INFO("begin inner consolidation!");
+
       // We need to consolidate an inner node
       InnerNode* new_inner =
           new InnerNode(mapping_table, orinode->low_key, orinode->high_key,
@@ -1396,7 +1353,6 @@ class BWTree {
 
     std::vector<std::vector<ValueType>> tmpvals;
 
-    // TODO: move the leaf-node branch inside switch and add inner-node branch.
     // the first node must be the original leaf node itself
     assert(delta_chain.top()->node_type == LEAF);
 
@@ -1409,7 +1365,7 @@ class BWTree {
       tmpvals.push_back(std::vector<ValueType>(*(orig_leaf_node->slotdata[i])));
     }
 
-    LOG_INFO("Consolidate: delta_chain.len = %lu", delta_chain.size());
+    LOG_INFO("Leaf Consolidate: delta_chain.len = %lu", delta_chain.size());
 
     // traverse the delta chain
     while (!delta_chain.empty()) {
@@ -1490,13 +1446,18 @@ class BWTree {
           break;
         case REMOVE_NODE_DELTA:
           break;
+        case INNER:
+          LOG_ERROR("Wrong inner delta!");
+          break;
         case LEAF:
           LOG_ERROR("Wrong leaf delta!");
+          break;
         default:
           break;
       }
     }
 
+    LOG_INFO("Leaf Consolodaye finish: %lu keys, %lu vals", tmpkeys.size(), tmpvals.size());
     return std::make_pair(tmpkeys, tmpvals);
   }
 
@@ -1527,7 +1488,7 @@ class BWTree {
     }
     tmpchilds.push_back(orig_inner_node->childid[orig_inner_node->slotuse]);
 
-    LOG_INFO("Consolidate: delta_chain.len = %lu", delta_chain.size());
+    LOG_INFO("Inner Consolidate: delta_chain.len = %lu", delta_chain.size());
 
     // traverse the delta chain
     while (!delta_chain.empty()) {
@@ -1561,7 +1522,12 @@ class BWTree {
             }
           }
         } break;
-
+        case INNER:
+          LOG_ERROR("Wrong inner delta!");
+          break;
+        case LEAF:
+          LOG_ERROR("Wrong leaf delta!");
+          break;
         default:
           LOG_ERROR("impossible type on inner node");
           break;
@@ -1652,16 +1618,12 @@ class BWTree {
   }
 
   void print_key_info(KeyType& key) {
-    std::count << key.GetTupleForComparison(m_metadata->GetKeySchema()).GetValue(0)
+    std::cout << key.GetTupleForComparison(m_metadata->GetKeySchema()).GetValue(0)
       << "," << key.GetTupleForComparison(m_metadata->GetKeySchema()).GetValue(1)
-      << std::endl;
+      << " ";
   }
 
-  void print_node_info(PidType pid) {
-    Node* node = mapping_table.get(pid);
-    size_t total_len = node->delta_list_len;
-    printf("pid - %lld, delta_chain_len: %ld, slotuse: %d  ", pid, total_len,
-           node->slotuse);
+  void print_node_delta_chain(Node* node, size_t total_len){
 
     // print out deltas added to this node in order
     for (int i = 0; i <= total_len; i++) {
@@ -1669,8 +1631,11 @@ class BWTree {
         LOG_ERROR("Wrong delta chain length!");
       }
       if (node->node_type == RECORD_DELTA) {
-        if (((RecordDelta*)node)->op_type == RecordDelta::INSERT)
-          printf("insert->");
+        if (((RecordDelta*)node)->op_type == RecordDelta::INSERT) {
+          printf("insert(%d) ", ((RecordDelta*)node)->slotuse);
+          print_key_info(((RecordDelta*)node)->key);
+          printf("->");
+        }
         else if (((RecordDelta*)node)->op_type == RecordDelta::DELETE)
           printf("delete->");
       } else if (node->node_type == SPLIT_DELTA) {
@@ -1682,6 +1647,27 @@ class BWTree {
       }
       node = node->next;
     }
+  }
+
+  void print_node_info(Node* node) {
+    size_t total_len = node->delta_list_len;
+    printf("pid - %lld, delta_chain_len: %ld, slotuse: %d  ", node->pid, total_len,
+           node->slotuse);
+
+    // print out deltas added to this node in order
+    print_node_delta_chain(node, total_len);
+
+    printf("\n");
+  }
+
+  void print_node_info(PidType pid) {
+    Node* node = mapping_table.get(pid);
+    size_t total_len = node->delta_list_len;
+    printf("pid - %lld, delta_chain_len: %ld, slotuse: %d  ", pid, total_len,
+           node->slotuse);
+
+    // print out deltas added to this node in order
+    print_node_delta_chain(node, total_len);
 
     printf("\n");
   }

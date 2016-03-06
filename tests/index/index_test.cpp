@@ -26,7 +26,7 @@ namespace test {
 //#define DELETE_TEST2
 //#define MULTI_INSERT_TEST
 #define MY_MULTI_TEST
-
+//#define MY_MULTI_TEST_ONLY_INSERT
 //===--------------------------------------------------------------------===//
 // Index Tests
 //===--------------------------------------------------------------------===//
@@ -39,6 +39,7 @@ ItemPointer item1(121, 7);
 ItemPointer item2(123, 19);
 
 index::Index *BuildIndex() {
+
   // Build tuple and key schema
   std::vector<std::vector<std::string>> column_names;
   std::vector<catalog::Column> columns;
@@ -144,6 +145,7 @@ void InsertTest(index::Index *index, VarlenPool *pool, size_t scale_factor) {
 
     // INSERT
     index->InsertEntry(key0.get(), item0);
+
     index->InsertEntry(key1.get(), item1);
     index->InsertEntry(key1.get(), item2);
     index->InsertEntry(key1.get(), item1);
@@ -151,7 +153,9 @@ void InsertTest(index::Index *index, VarlenPool *pool, size_t scale_factor) {
     index->InsertEntry(key1.get(), item0);
 
     index->InsertEntry(key2.get(), item1);
+
     index->InsertEntry(key3.get(), item1);
+
     index->InsertEntry(key4.get(), item1);
     LOG_INFO("--------------- next round insert ---------------");
   }
@@ -342,7 +346,7 @@ TEST(IndexTests, MyMultiThreadedTest) {
 
   locations = index->ScanAllKeys();
   if (index->HasUniqueKeys())
-    EXPECT_EQ(locations.size(), num_threads * scale_factor);
+    EXPECT_EQ(locations.size(), scale_factor);
   else
     EXPECT_EQ(locations.size(), 3 * num_threads * scale_factor);
 
@@ -371,6 +375,52 @@ TEST(IndexTests, MyMultiThreadedTest) {
   delete tuple_schema;
 }
 #endif
+
+#ifdef MY_MULTI_TEST_ONLY_INSERT
+TEST(IndexTests, MyMultiThreadedOnlyInsertTest) {
+  auto pool = TestingHarness::GetInstance().GetTestingPool();
+  std::vector<ItemPointer> locations;
+
+  // INDEX
+  std::unique_ptr<index::Index> index(BuildIndex());
+
+  // Parallel Test
+  size_t num_threads = 20;
+  size_t scale_factor = 30;
+  LaunchParallelTest(num_threads, InsertTest, index.get(), pool, scale_factor);
+
+  locations = index->ScanAllKeys();
+  if (index->HasUniqueKeys())
+    EXPECT_EQ(locations.size(), 5 * scale_factor);
+  else
+    EXPECT_EQ(locations.size(), 9 * num_threads * scale_factor);
+
+  std::unique_ptr<storage::Tuple> key1(new storage::Tuple(key_schema, true));
+  std::unique_ptr<storage::Tuple> key2(new storage::Tuple(key_schema, true));
+
+  key1->SetValue(0, ValueFactory::GetIntegerValue(100), pool);
+  key1->SetValue(1, ValueFactory::GetStringValue("b"), pool);
+  key2->SetValue(0, ValueFactory::GetIntegerValue(100), pool);
+  key2->SetValue(1, ValueFactory::GetStringValue("c"), pool);
+
+  locations = index->ScanKey(key1.get());
+  if (index->HasUniqueKeys()) {
+    EXPECT_EQ(locations.size(), 1);
+  } else {
+    EXPECT_EQ(locations.size(), 5 * num_threads);
+  }
+
+  locations = index->ScanKey(key2.get());
+  if (index->HasUniqueKeys()) {
+    EXPECT_EQ(locations.size(), 1);
+  } else {
+    EXPECT_EQ(locations.size(), num_threads);
+  }
+
+  delete tuple_schema;
+}
+#endif
+
 
 }  // End test namespace
 }  // End peloton namespace

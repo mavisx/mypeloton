@@ -39,7 +39,6 @@ ItemPointer item1(121, 7);
 ItemPointer item2(123, 19);
 
 index::Index *BuildIndex() {
-
   // Build tuple and key schema
   std::vector<std::vector<std::string>> column_names;
   std::vector<catalog::Column> columns;
@@ -186,7 +185,7 @@ void DeleteTest(index::Index *index, VarlenPool *pool, size_t scale_factor) {
     // DELETE
     index->DeleteEntry(key0.get(), item0);
     index->DeleteEntry(key1.get(), item1);
-//    index->DeleteEntry(key2.get(), item2);
+    //    index->DeleteEntry(key2.get(), item2);
     index->DeleteEntry(key3.get(), item1);
     index->DeleteEntry(key3.get(), item1);
     index->DeleteEntry(key3.get(), item1);
@@ -228,7 +227,7 @@ TEST(IndexTests, DeleteTest) {
   std::unique_ptr<index::Index> index(BuildIndex());
 
   // Single threaded test
-  size_t scale_factor = 100;
+  size_t scale_factor = 1000;
   LaunchParallelTest(1, InsertTest, index.get(), pool, scale_factor);
   LaunchParallelTest(1, DeleteTest, index.get(), pool, scale_factor);
 
@@ -420,7 +419,6 @@ TEST(IndexTests, MyMultiThreadedOnlyInsertTest) {
   delete tuple_schema;
 }
 #endif
-
 
 }  // End test namespace
 }  // End peloton namespace

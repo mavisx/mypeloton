@@ -23,10 +23,12 @@
 #include "../storage/tuple.h"
 #include "index.h"
 
+// macro for debug
 //#define MY_PRINT_DEBUG
+//#define TURN_ON_CONSOLIDATE
 
 // in bytes
-#define BWTREE_NODE_SIZE 4096
+#define BWTREE_NODE_SIZE 256
 
 #define BWTREE_MAX(a, b) ((a) < (b) ? (b) : (a))
 
@@ -628,13 +630,15 @@ class BWTree {
     switch (node->node_type) {
       case LEAF:
       case RECORD_DELTA: {
-//        if (node->node_type == LEAF) {
-//          LOG_INFO("Search Range Info: meet a leaf, pid: %lld, slotuse %d",
-//                   node->pid, node->slotuse);
-//        } else {
-//          LOG_INFO("Search Range Info: meet a record, pid: %lld, slotuse %d",
-//                   node->pid, node->slotuse);
-//        }
+        //        if (node->node_type == LEAF) {
+        //          LOG_INFO("Search Range Info: meet a leaf, pid: %lld, slotuse
+        //          %d",
+        //                   node->pid, node->slotuse);
+        //        } else {
+        //          LOG_INFO("Search Range Info: meet a record, pid: %lld,
+        //          slotuse %d",
+        //                   node->pid, node->slotuse);
+        //        }
 
         return node->pid;
       }
@@ -656,7 +660,7 @@ class BWTree {
         return search(node->next, key, path);
       }
       case REMOVE_NODE_DELTA: {
-//        LOG_INFO("Search Range Info: meet a removed node");
+        //        LOG_INFO("Search Range Info: meet a removed node");
 
         path.pop();
         if (path.empty()) {
@@ -674,7 +678,7 @@ class BWTree {
         }
       }
       case MERGE_DELTA: {
-//        LOG_INFO("Search Range Info: meet merge delta");
+        //        LOG_INFO("Search Range Info: meet merge delta");
 
         if (key_greaterequal(key, ((MergeDelta*)node)->Kp, false)) {
           node = ((MergeDelta*)node)->orignal_node;
@@ -688,7 +692,7 @@ class BWTree {
         return search(node->next, key, path);
       }
       case SPLIT_DELTA: {
-//        LOG_INFO("Search Range Info: meet split/merge delta");
+        //        LOG_INFO("Search Range Info: meet split/merge delta");
         pid = ((SplitDelta*)node)->pQ;
         if (key_greaterequal(key, ((SplitDelta*)node)->Kp, false)) {
           // TODO: should
@@ -706,7 +710,7 @@ class BWTree {
       }
       case INNER: {
         if (node->slotuse == 0) {
-//          LOG_INFO("empty inner node");
+          //          LOG_INFO("empty inner node");
           pid = ((InnerNode*)node)->childid[0];
           if (pid == NULL_PID) {
             LOG_ERROR("error leftmost pid -- NULL_PID");
@@ -1012,7 +1016,6 @@ class BWTree {
       SplitDelta* new_split;
       KeyType pivotal;
 
-
       // create a new right sibling node
       PidType new_node_pid;
 
@@ -1022,7 +1025,6 @@ class BWTree {
         new_node_pid = create_inner(check_split_node, &pivotal);
 
       Node* new_node = mapping_table.get(new_node_pid);
-
 
       // create and prepend a split node
       new_split = new SplitDelta(check_split_node, pivotal, new_node_pid,
@@ -1035,7 +1037,7 @@ class BWTree {
         // clean created waste
         Node* old_ptr = mapping_table.get(new_node_pid);
         delete old_ptr;
-        if(!mapping_table.set(new_node_pid, old_ptr, nullptr)){
+        if (!mapping_table.set(new_node_pid, old_ptr, nullptr)) {
           LOG_ERROR("In split, delete node before retry fail!");
           assert(0);
         }
@@ -1061,12 +1063,13 @@ class BWTree {
 #endif
       }
 
+#ifdef TURN_ON_CONSOLIDATE
       check_split_node = mapping_table.get(check_split_pid);
       // check if we need to consolidate
       if (check_split_node->delta_list_len > MAX_DELTA_CHAIN_LEN) {
         consolidate(check_split_pid);
       }
-
+#endif
 
       // Step 1.2 update our check_split_node as its parent (or create new root)
       if (path.empty()) {
@@ -1086,11 +1089,13 @@ class BWTree {
         LOG_INFO("parent = %llu, created", check_split_pid);
       }
 
+#ifdef TURN_ON_CONSOLIDATE
       check_split_node = mapping_table.get(check_split_pid);
       // check if we need to consolidate
       if (check_split_node->delta_list_len > MAX_DELTA_CHAIN_LEN) {
         consolidate(check_split_pid);
       }
+#endif
 
       check_split_node = mapping_table.get(check_split_pid);
       // Step 1.3 add indexEntryDelta to current check_split_node
@@ -1119,11 +1124,14 @@ class BWTree {
           check_split_node = mapping_table.get(check_split_pid);
         }
       }
+
+#ifdef TURN_ON_CONSOLIDATE
       check_split_node = mapping_table.get(check_split_pid);
       // check if we need to consolidate
       if (check_split_node->delta_list_len > MAX_DELTA_CHAIN_LEN) {
         consolidate(check_split_pid);
       }
+#endif
 
       check_split_node = mapping_table.get(check_split_pid);
 #ifdef MY_PRINT_DEBUG
@@ -1150,8 +1158,13 @@ class BWTree {
       std::stack<PidType> path = search(BWTree::root, key);
 
       PidType basic_pid = path.top();
-      //Check whether we need to consolidate, also check split correctness
+
+#ifdef TURN_ON_CONSOLIDATE
+      // Check whether we need to consolidate, also check split correctness
       Node* basic_node = consolidate(basic_pid);
+#else
+      Node* basic_node = mapping_table.get(basic_pid);
+#endif
 
       bool key_dup = key_is_in(key, basic_node);
 
@@ -1167,8 +1180,7 @@ class BWTree {
           basic_node->inf_lowkey, basic_node->inf_highkey);
 
       new_delta->pid = basic_pid;
-      if (!key_dup)
-        new_delta->slotuse = new_delta->next->slotuse + 1;
+      if (!key_dup) new_delta->slotuse = new_delta->next->slotuse + 1;
 
       basic_node = mapping_table.get(basic_pid);
       new_delta->high_key = basic_node->high_key;
@@ -1202,9 +1214,14 @@ class BWTree {
       PidType basic_pid = path.top();
       path.pop();
 
-      // Check whether we need to consolidate, also check the correctness of previous split
+#ifdef TURN_ON_CONSOLIDATE
+      // Check whether we need to consolidate, also check the correctness of
+      // previous split
       Node* basic_node = consolidate(basic_pid);
-      // print_node_info(basic_pid);
+// print_node_info(basic_pid);
+#else
+      Node* basic_node = mapping_table.get(basic_pid);
+#endif
 
       auto tv_count_pair = count_pair(key, value, basic_node);
 
@@ -1232,13 +1249,13 @@ class BWTree {
   Node* consolidate(PidType pid) {
     Node* orinode = mapping_table.get(pid);
 
-    //check the correctness of previous split
-    if(orinode->need_split()){
+    // check the correctness of previous split
+    if (orinode->need_split()) {
       LOG_ERROR("From consolidate: invalid prevous split");
       assert(0);
     }
 
-    while(orinode->delta_list_len > MAX_DELTA_CHAIN_LEN){
+    while (orinode->delta_list_len > MAX_DELTA_CHAIN_LEN) {
       if (orinode->is_leaf) {
         LOG_INFO("begin leaf consolidation!");
 
@@ -1274,7 +1291,7 @@ class BWTree {
           delete new_leaf;
           LOG_INFO(
               "CAS FAIL: unnecessary consolidate, remove just created "
-                  "consolidated node");
+              "consolidated node");
         }
       } else {
         LOG_INFO("begin inner consolidation!");
@@ -1310,19 +1327,18 @@ class BWTree {
           delete new_inner;
           LOG_INFO(
               "CAS FAIL: unnecessary consolidate, remove just created "
-                  "consolidated node");
+              "consolidated node");
         }
       }
       LOG_INFO("Fail consolidation");
       orinode = mapping_table.get(pid);
-      if(orinode->need_split()){
+      if (orinode->need_split()) {
         LOG_ERROR("From consolidate: invalid split check");
         assert(0);
       }
-      //TODO: delete this break and let the loop work
+      // TODO: delete this break and let the loop work
       break;
     }
-
 
     return orinode;
   }
@@ -1459,7 +1475,8 @@ class BWTree {
       }
     }
 
-    LOG_INFO("Leaf Consolodaye finish: %lu keys, %lu vals", tmpkeys.size(), tmpvals.size());
+    LOG_INFO("Leaf Consolodaye finish: %lu keys, %lu vals", tmpkeys.size(),
+             tmpvals.size());
     return std::make_pair(tmpkeys, tmpvals);
   }
 
@@ -1620,13 +1637,13 @@ class BWTree {
   }
 
   void print_key_info(KeyType& key) {
-    std::cout << key.GetTupleForComparison(m_metadata->GetKeySchema()).GetValue(0)
-      << "," << key.GetTupleForComparison(m_metadata->GetKeySchema()).GetValue(1)
-      << " ";
+    std::cout << key.GetTupleForComparison(m_metadata->GetKeySchema())
+                     .GetValue(0) << ","
+              << key.GetTupleForComparison(m_metadata->GetKeySchema())
+                     .GetValue(1) << " ";
   }
 
-  void print_node_delta_chain(Node* node, size_t total_len){
-
+  void print_node_delta_chain(Node* node, size_t total_len) {
     // print out deltas added to this node in order
     for (int i = 0; i <= total_len; i++) {
       if (node->delta_list_len != total_len - i) {
@@ -1637,8 +1654,7 @@ class BWTree {
           printf("insert(%d) ", ((RecordDelta*)node)->slotuse);
           print_key_info(((RecordDelta*)node)->key);
           printf("->");
-        }
-        else if (((RecordDelta*)node)->op_type == RecordDelta::DELETE)
+        } else if (((RecordDelta*)node)->op_type == RecordDelta::DELETE)
           printf("delete->");
       } else if (node->node_type == SPLIT_DELTA) {
         printf("split(pQ=%llu)->", ((SplitDelta*)node)->pQ);
@@ -1653,8 +1669,8 @@ class BWTree {
 
   void print_node_info(Node* node) {
     size_t total_len = node->delta_list_len;
-    printf("pid - %lld, delta_chain_len: %ld, slotuse: %d  ", node->pid, total_len,
-           node->slotuse);
+    printf("pid - %lld, delta_chain_len: %ld, slotuse: %d  ", node->pid,
+           total_len, node->slotuse);
 
     // print out deltas added to this node in order
     print_node_delta_chain(node, total_len);

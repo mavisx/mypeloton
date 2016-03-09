@@ -92,35 +92,34 @@ class BWTree {
  public:
   // *** Constructed Types
 
-  /// Typedef of our own type
+  // Typedef of our own type
   typedef BWTree<KeyType, ValueType, KeyComparator, KeyEqualityChecker>
       BwTreeSelf;
 
-  /// Size type used to count keys
-  typedef size_t SizeType;
-
-  /// The pair of KeyType and data_type, this may be different from value_type.
-  typedef std::pair<KeyType, ValueType> PairType;
+  // The unordered_set that will be used for recording
+  // duplicated keys
+  typedef std::unordered_set<ValueType, std::HashPair,
+                             ItemPointerEqualityChecker> DelSet;
 
  public:
   // *** Static Constant Options and Values of the Bw Tree
-  /// Base B2 tree parameter: The number of key/data slots in each leaf
+  // Base B2 tree parameter: The number of key/data slots in each leaf
   static const unsigned short leafslotmax =
       BWTREE_MAX(8, BWTREE_NODE_SIZE / (sizeof(KeyType) + sizeof(ValueType)));
 
-  /// Base B+ tree parameter: The number of key slots in each inner node,
-  /// this can differ from slots in each leaf.
+  // Base B+ tree parameter: The number of key slots in each inner node,
+  // this can differ from slots in each leaf.
   static const unsigned short innerslotmax =
       BWTREE_MAX(8, BWTREE_NODE_SIZE / (sizeof(KeyType) + sizeof(PidType)));
 
-  /// Computed B+ tree parameter: The minimum number of key/data slots used
-  /// in a leaf. If fewer slots are used, the leaf will be merged or slots
-  /// shifted from it's siblings.
+  // Computed B+ tree parameter: The minimum number of key/data slots used
+  // in a leaf. If fewer slots are used, the leaf will be merged or slots
+  // shifted from it's siblings.
   static const unsigned short minleafslots = (leafslotmax / 2);
 
-  /// Computed B+ tree parameter: The minimum number of key slots used
-  /// in an inner node. If fewer slots are used, the inner node will be
-  /// merged or slots shifted from it's siblings.
+  // Computed B+ tree parameter: The minimum number of key slots used
+  // in an inner node. If fewer slots are used, the inner node will be
+  // merged or slots shifted from it's siblings.
   static const unsigned short mininnerslots = (innerslotmax / 2);
 
   struct Node;
@@ -194,7 +193,7 @@ class BWTree {
     }
 
     // if correctly add this new addr, return the new pid,
-    // else return -1
+    // else return NULL_PID
     long add(Node* addr) {
       unsigned long new_pid = nextPid++;
 
@@ -238,29 +237,26 @@ class BWTree {
   };
 
   /**
-   * The Node inheritance hierachy
+   * The Node inheritance hierarchy
    * **/
   struct Node {
-    // reference to outer mapping table
-    MappingTable& mapping_table;
-    /// Number of key slotuse use, so number of valid children or data
-    /// pointers
-    unsigned short slotuse;
-
-    // flag to indicate whether this chain belongs to a leaf node
-    bool is_leaf;
-
     // Delta chain next pointer
     Node* next;
 
-    // Node pid
-    PidType pid;
+    // type of this node
+    NodeType node_type;
 
     // Length of current delta chain
     size_t delta_list_len;
 
-    // type of this node
-    NodeType node_type;
+    // reference to outer mapping table
+    MappingTable& mapping_table;
+
+    // linked list pointers to traverse the leaves
+    PidType next_leafnode;
+
+    // flag to indicate whether this chain belongs to a leaf node
+    bool is_leaf;
 
     // minimal and maximal key in this node
     KeyType low_key, high_key;
@@ -268,27 +264,28 @@ class BWTree {
     // check if lowkey == -inf, highkey == +inf
     bool inf_lowkey, inf_highkey;
 
-    // Double linked list pointers to traverse the leaves
-    // Node* prev_node;
+    // Number of key slotuse use, so number of valid children or data
+    // pointers
+    unsigned short slotuse;
 
-    // Double linked list pointers to traverse the leaves
-    PidType next_leafnode;
+    // Node pid
+    PidType pid;
 
     // constructor
     Node(Node* ne, NodeType ntype, size_t delta_l, MappingTable& mt,
          PidType next_leaf, bool is_lf, KeyType lowkey, KeyType highkey,
          bool inf_low, bool inf_high)
-        : mapping_table(mt),
+        : next(ne),
+          node_type(ntype),
+          delta_list_len(delta_l),
+          mapping_table(mt),
+          next_leafnode(next_leaf),
+          is_leaf(is_lf),
           low_key(lowkey),
           high_key(highkey),
           inf_lowkey(inf_low),
           inf_highkey(inf_high) {
-      node_type = ntype;
       slotuse = 0;
-      next = ne;
-      delta_list_len = delta_l;
-      next_leafnode = next_leaf;
-      is_leaf = is_lf;
     }
 
     virtual ~Node() {}
@@ -323,58 +320,41 @@ class BWTree {
   // another mapping table used for garbage collection
   MappingTable garbage_table;
 
-  /// Pointer to first leaf in the double linked leaf chain
+  // Pointer to first leaf in the double linked leaf chain
   PidType headleaf;
 
-  /// Pointer to last leaf in the double linked leaf chain
-  PidType tailleaf;
-
  private:
-  /// Extended structure of a inner node in-memory. Contains only keys and no
-  /// data items.
+  // Extended structure of a inner node in-memory. Contains only keys and no
+  // data items.
   struct InnerNode : public Node {
-    /// Define an related allocator for the inner_node structs.
-    // typedef typename _Alloc::template rebind<inner_node>::other alloc_type
-
-    /// Keys of children or data pointers,
+    // Keys of children or data pointers,
     //  we plus one so as to avoid overflow when consolidation
     KeyType slotkey[innerslotmax + 1];
 
-    /// Pointers to children,
+    // Pointers(PIDs) to children,
     //  we plus one so as to avoid overflow when consolidation
     PidType childid[innerslotmax + 1 + 1];
 
-    /// Set variables to initial values
+    // Constructor
     InnerNode(MappingTable& mapping_table, KeyType lowkey, KeyType highkey,
               bool inf_low, bool inf_high)
         : Node(nullptr, NodeType::INNER, 0, mapping_table, NULL_PID, false,
                lowkey, highkey, inf_low, inf_high) {}
-
-    /// True if the node's slots are full
-    inline bool isfull() const { return (Node::slotuse == innerslotmax); }
-
-    /// True if few used entries, less than half full
-    inline bool isfew() const { return (Node::slotuse <= mininnerslots); }
-
-    /// True if node has too few entries
-    inline bool isunderflow() const { return (Node::slotuse < mininnerslots); }
   };
 
-  /// Extended structure of a leaf node in memory. Contains pairs of keys and
-  /// data items. Key and data slots are kept in separate arrays, because the
-  /// key array is traversed very often compared to accessing the data items.
+  // Extended structure of a leaf node in memory. Contains pairs of keys and
+  // data items. Key and data slots are kept in separate arrays, because the
+  // key array is traversed very often compared to accessing the data items.
   struct LeafNode : public Node {
-    /// Define an related allocator for the leaf_node structs.
-    //    typedef typename _Alloc::template rebind<LeafNode>::other alloc_type;
-
-    /// Keys of children or data pointers
+    // Keys of children or data pointers
     //  we plus one so as to avoid overflow when consolidation
     KeyType slotkey[leafslotmax + 1];
 
-    /// Array of data, each bucket points to an vector of actual data
+    // Array of data, each bucket points to an vector of actual data
     //  we plus one so as to avoid overflow when consolidation
     std::vector<ValueType>* slotdata[leafslotmax + 1];
 
+    // Constructor
     LeafNode(MappingTable& mapping_table, PidType next_leafnode, KeyType lowkey,
              KeyType highkey, bool inf_low, bool inf_high)
         : Node(nullptr, NodeType::LEAF, 0, mapping_table, next_leafnode, true,
@@ -385,45 +365,27 @@ class BWTree {
       }
     }
 
+    // Destructor
     ~LeafNode() {
       for (int i = 0; i < leafslotmax + 1; i++) {
         if (slotdata[i] != nullptr) delete slotdata[i];
       }
     }
 
-    /// True if the node's slots are full
-    inline bool isfull() const { return (Node::slotuse == leafslotmax); }
-
-    /// True if few used entries, less than half full
-    inline bool isfew() const { return (Node::slotuse <= minleafslots); }
-
-    /// True if node has too few entries
-    inline bool isunderflow() const { return (Node::slotuse < minleafslots); }
-
-    /// Set the (key,data) pair in slot. Overloaded function used by
-    /// bulk_load().
-    //    inline void set_slot(unsigned short slot, const PairType& value) {
-    //      assert(slot < Node::slotuse);
-    //      slotkey[slot] = value.first;
-    //      if (slotdata[slot] == nullptr) {
-    //        slotdata[slot] = new std::vector<ValueType>();
-    //      }
-    //      slotdata[slot]->push_back(value.second);
-    //    }
-
-    /// Set the key pair in slot. Overloaded function used by
-    /// bulk_load().
-    inline void set_slot(unsigned short slot, const KeyType& key) {
-      assert(slot < Node::slotuse);
-      slotkey[slot] = key;
-    }
   };
 
   // Delta Node for record update operation
   struct RecordDelta : public Node {
-    // construction added -mavis
     enum RecordType { INSERT = 0, DELETE = 1, UPDATE = 2 };
 
+    // the enum variable indicating what kind of record delta it is
+    RecordType op_type;
+
+    // the key and value associated with is this delta
+    KeyType key;
+    ValueType value;
+
+    // Constructor
     RecordDelta(Node* next, RecordType op, KeyType k, ValueType v,
                 MappingTable& mapping_table, PidType next_leafnode,
                 KeyType lowkey, KeyType highkey, bool inf_low, bool inf_high)
@@ -432,17 +394,22 @@ class BWTree {
           op_type(op),
           key(k),
           value(v) {
+      // prepend this node to current head in the delta chain
       prepend(this, next);
       // temporarily update the slotuse of the new delta node
       this->slotuse = next->slotuse;
     }
-    RecordType op_type;
-    KeyType key;
-    ValueType value;
   };
 
-  // Delta Node for spliting operation
+  // Delta Node for splitting operation step 1
   struct SplitDelta : public Node {
+    // the separator key in the original node
+    KeyType Kp;
+
+    // pointer to the new created node
+    PidType pQ;
+
+    // Constructor
     SplitDelta(Node* next, KeyType Kp, PidType pQ, MappingTable& mapping_table,
                PidType next_leafnode, KeyType lowkey, KeyType highkey,
                bool inf_low, bool inf_high)
@@ -450,15 +417,26 @@ class BWTree {
                next->is_leaf, lowkey, highkey, inf_low, inf_high),
           Kp(Kp),
           pQ(pQ) {
+      // prepend this node to current head in the delta chain
       prepend(this, next);
+
       // temporarily update the slotuse of the new delta node
       this->slotuse = next->slotuse / 2;
     }
-    KeyType Kp;
-    PidType pQ;
   };
 
+  // Delta Node for splitting operation step 2
   struct IndexEntryDelta : public Node {
+    // the separator key.
+    // the new creeated node wil be bounded by [Kp, Kq)
+    KeyType Kp, Kq;
+    // indicating whether Kq is +infinity
+    bool inf_Kq;
+
+    // pointer to the new created node
+    PidType pQ;
+
+    // Constructor
     IndexEntryDelta(Node* next, KeyType Kp, KeyType Kq, bool Kq_is_inf,
                     PidType pQ, MappingTable& mapping_table,
                     PidType next_leafnode, KeyType lowkey, KeyType highkey,
@@ -468,19 +446,18 @@ class BWTree {
                inf_high),
           Kp(Kp),
           Kq(Kq),
-          pQ(pQ),
-          inf_Kq(Kq_is_inf) {
+          inf_Kq(Kq_is_inf),
+          pQ(pQ) {
+      // prepend this node to current head in the delta chain
       prepend(this, next);
       // update the slotuse of the new delta node
       this->slotuse = next->slotuse + 1;
     }
-    KeyType Kp, Kq;
-    PidType pQ;
-    bool inf_Kq;
   };
 
-  // Delta Node for merging operation
+  // Delta Node for merging operation step 1
   struct RemoveDelta : public Node {
+    // Constructor
     RemoveDelta(Node* next, MappingTable& mapping_table, PidType next_leafnode,
                 KeyType lowkey, KeyType highkey, bool inf_low, bool inf_high)
         : Node(next, NodeType::REMOVE_NODE_DELTA, 0, mapping_table,
@@ -488,7 +465,11 @@ class BWTree {
                inf_high) {}
   };
 
+  // Delta Node for merging operation step 2
   struct MergeDelta : public Node {
+    KeyType Kp;
+    Node* orignal_node;
+    // Constructor
     MergeDelta(Node* next, KeyType Kp, Node* orignal_node,
                MappingTable& mapping_table, PidType next_leafnode,
                KeyType lowkey, KeyType highkey, bool inf_low, bool inf_high)
@@ -496,11 +477,15 @@ class BWTree {
                next->is_leaf, lowkey, highkey, inf_low, inf_high),
           Kp(Kp),
           orignal_node(orignal_node) {}
-    KeyType Kp;
-    Node* orignal_node;
   };
 
+  // Delta Node for merging operation step 3
   struct DeleteIndexDelta : public Node {
+    KeyType Kp, Kq;
+    PidType pQ;
+    bool inf_Kq;
+
+    // Constructor
     DeleteIndexDelta(Node* next, KeyType Kp, KeyType Kq, bool Kq_is_inf,
                      PidType pQ, MappingTable& mapping_table,
                      PidType next_leafnode, KeyType lowkey, KeyType highkey,
@@ -510,16 +495,12 @@ class BWTree {
                inf_high),
           Kp(Kp),
           Kq(Kq),
-          pQ(pQ),
-          inf_Kq(Kq_is_inf) {}
-    KeyType Kp, Kq;
-    PidType pQ;
-    bool inf_Kq;
+          inf_Kq(Kq_is_inf),
+          pQ(pQ) {}
   };
 
  public:
   // constructor
-
   BWTree(const KeyComparator& kc, const KeyEqualityChecker& ke,
          peloton::index::IndexMetadata* metadata)
       : m_key_less(kc),
@@ -529,11 +510,12 @@ class BWTree {
     KeyType waste;
     LeafNode* addr =
         new LeafNode(mapping_table, NULL_PID, waste, waste, true, true);
+
     long newpid = mapping_table.add(addr);
     if (newpid >= 0) {
-      // initialize the root, and tail pid.
+      // initialize the root and head pid.
       root = newpid;
-      headleaf = tailleaf = newpid;
+      headleaf = newpid;
     } else {
       delete addr;
       LOG_ERROR("Can't create the initial leafNode!");
@@ -545,11 +527,7 @@ class BWTree {
   // destructor
   ~BWTree(){};
 
-  /*
-   ************************************************
-   *    public method exposed to users -leiqi     *
-   ************************************************
-   */
+
  public:
   // True if a < b ? "constructed" from m_key_less()
   inline bool key_less(const KeyType& a, const KeyType b,
@@ -558,40 +536,37 @@ class BWTree {
     return m_key_less(a, b);
   }
 
-  // True if a <= b ? constructed from key_less()
+  // True if a <= b ? constructed from m_key_less()
   inline bool key_lessequal(const KeyType& a, const KeyType b,
                             bool b_max_inf) const {
     if (b_max_inf) return true;
     return !m_key_less(b, a);
   }
 
-  // True if a > b ? constructed from key_less()
+  // True if a > b ? constructed from m_key_less()
   inline bool key_greater(const KeyType& a, const KeyType& b,
                           bool b_min_inf) const {
     if (b_min_inf) return true;
     return m_key_less(b, a);
   }
 
-  // True if a >= b ? constructed from key_less()
+  // True if a >= b ? constructed from m_key_less()
   inline bool key_greaterequal(const KeyType& a, const KeyType b,
                                bool b_min_inf) const {
     if (b_min_inf) return true;
     return !m_key_less(a, b);
   }
 
-  // True if a == b ? constructed from key_less().
+  // True if a == b ? constructed from m_key_less()
   inline bool key_equal(const KeyType& a, const KeyType& b) const {
     return m_key_equal(a, b);
   }
 
+  // True if a == b constructed from m_value_equal()
   inline bool value_equal(const ValueType& a, const ValueType& b) const {
     return m_value_equal(a, b);
   }
-  /*
-    ************************************************
-    * private functions, invisible to users -leiqi *
-    ************************************************
-    */
+
 
  private:
   KeyComparator m_key_less;
@@ -599,6 +574,8 @@ class BWTree {
   ItemPointerEqualityChecker m_value_equal;
   peloton::index::IndexMetadata* m_metadata;
 
+  // get a path of PIDs for searhing for
+  // searching for a key from the tree rooted at a given pid
   std::stack<PidType> search(PidType pid, KeyType key) {
     auto node = mapping_table.get(pid);
     if (node == nullptr) {
@@ -608,7 +585,10 @@ class BWTree {
 
     std::stack<PidType> path;
     path.push(pid);
+
+    // call the helping function to fill up stack path
     PidType res = search(node, key, path);
+
     if (res == -1) {
       std::stack<PidType> empty_res;
       return empty_res;
@@ -617,9 +597,12 @@ class BWTree {
     if (path.empty()) {
       LOG_ERROR("Search get empty tree");
     }
+
     return path;
   }
 
+
+  // The helping funtion for the above search function
   PidType search(Node* node, KeyType key, std::stack<PidType>& path) {
     // should always keep track of right key range even in delta node
     PidType pid;
@@ -744,12 +727,16 @@ class BWTree {
       default:
         return -1;
     }
-    return -1;
   }
 
-  typedef std::unordered_set<ValueType, std::HashPair,
-                             ItemPointerEqualityChecker> DelSet;
+  // check whether a key is in a give delta chain
+  inline bool key_is_in(KeyType key, Node* listhead) {
+    // the set used for recording duplicated keys
+    DelSet deleted_set;
+    return key_is_in(key, listhead, deleted_set);
+  };
 
+  // the helping function for above function
   bool key_is_in(KeyType key, Node* listhead, DelSet& deleted) {
     if (listhead == nullptr) return false;
 
@@ -800,12 +787,9 @@ class BWTree {
     }
   }
 
-  inline bool key_is_in(KeyType key, Node* listhead) {
-    DelSet deleted_set;
-    return key_is_in(key, listhead, deleted_set);
-  };
-
-  // return pair nums, also calculates total val nums of the key in count
+  // return pair a pair of integer, the 1st number will be
+  // the number of values for a coressponding key in the delta chian;
+  // the 2nd will be the number of (key, value) pair in the delta chain
   std::pair<int, int> count_pair(KeyType key, ValueType value, Node* listhead) {
     int total_count = 0;
     int pair_count = 0;
@@ -883,6 +867,11 @@ class BWTree {
     return std::pair<int, int>(total_count, pair_count);
   }
 
+
+  // append a delete detla for deleting (key, value) from a delta chain
+  // whose head is basic_node.
+  // deletekey indicates whether we need to delete the key from this node
+  // (when all its value have been deleted)
   bool append_delete(Node* basic_node, KeyType key, ValueType value,
                      bool deletekey) {
     RecordDelta* new_delta = new RecordDelta(
@@ -908,7 +897,7 @@ class BWTree {
     return false;
   }
 
-  // private fuctions, invisible to users
+  // prepend a delta_node to orig_node and increment the delta_list_len
   inline static bool prepend(Node* delta_node, Node* orig_node) {
     // update the delta_list_len of the delta node
     delta_node->delta_list_len = orig_node->delta_list_len + 1;
@@ -920,6 +909,7 @@ class BWTree {
   }
 
  public:
+  // save all values corressponding to a given key in the result vector
   void get_value(KeyType key, std::vector<ValueType>& result) {
     std::stack<PidType> path = search(root, key);
 
@@ -1001,7 +991,8 @@ class BWTree {
     }
   }
 
-  // perform split for the node containing (key, value)
+  // perform split for the leaf node containing key
+  // It will iterativelyy split parent node if necessary
   void split(KeyType key) {
     std::stack<PidType> path = search(BWTree::root, key);
 
@@ -1146,7 +1137,7 @@ class BWTree {
     }
   }
 
-  // public method exposed to users -mavis
+  // insert a (key, value) pair into our bwtree
   bool insert_entry(KeyType key, ValueType value) {
     // Step1: perform split if necessary
     split(key);
@@ -1199,6 +1190,7 @@ class BWTree {
     return true;
   }
 
+  // delete a (key, value) pair from our bwtree
   bool delete_entry(KeyType key, ValueType value) {
     // Step1: perform split if necessary
     split(key);
@@ -1246,6 +1238,7 @@ class BWTree {
     return true;
   };
 
+  // perform consolidate for a certain node identified by its pid
   Node* consolidate(PidType pid) {
     Node* orinode = mapping_table.get(pid);
 
@@ -1343,6 +1336,9 @@ class BWTree {
     return orinode;
   }
 
+
+  // helper function to consolidate a leaf node and return the
+  // resulting vector of keys and values
   std::pair<std::vector<KeyType>, std::vector<std::vector<ValueType>>>
   leaf_fake_consolidate(Node* new_delta) {
     std::stack<Node*> delta_chain;
@@ -1481,6 +1477,8 @@ class BWTree {
     return std::make_pair(tmpkeys, tmpvals);
   }
 
+  // helper function to consolidate an inner node and return the
+  // resulting vector of keys and childpids
   std::pair<std::vector<KeyType>, std::vector<PidType>> inner_fake_consolidate(
       Node* new_delta) {
     std::stack<Node*> delta_chain;
@@ -1557,6 +1555,8 @@ class BWTree {
     return std::make_pair(tmpkeys, tmpchilds);
   }
 
+  // create a new leaf node that split from original "check_split_node"
+  // and setting the pivotal as the first key in the new leaf node
   PidType create_leaf(Node* check_split_node, KeyType* pivotal) {
     KeyType waste;
     LeafNode* new_leaf = new LeafNode(
@@ -1580,6 +1580,8 @@ class BWTree {
     return new_leaf_pid;
   }
 
+  // create a new inner node that split from original "check_split_node"
+  // and setting the pivotal as the first key in the new inner node
   PidType create_inner(Node* check_split_node, KeyType* pivotal) {
     KeyType waste;
     InnerNode* new_inner =
@@ -1603,6 +1605,9 @@ class BWTree {
     return new_inner_pid;
   }
 
+
+  // interface for scanning all values in the bwtree and put them into
+  // a result vector
   void scan_all(std::vector<ValueType>& v) {
     Node* node = mapping_table.get(headleaf);
 
@@ -1620,6 +1625,8 @@ class BWTree {
     }
   }
 
+  // interface for scanning all values in the bwtree under some constraints
+  // and put them into a result vector
   void scan(std::vector<KeyType>& keys_result,
             std::vector<std::vector<ItemPointer>>& values_result) {
     Node* node = mapping_table.get(headleaf);
@@ -1637,6 +1644,10 @@ class BWTree {
     }
   }
 
+  /*
+   * These are helper funtion for debuging
+   * */
+  // print the content of a key in readable manner
   void print_key_info(KeyType& key) {
     std::cout << key.GetTupleForComparison(m_metadata->GetKeySchema())
                      .GetValue(0) << ","
@@ -1644,6 +1655,7 @@ class BWTree {
                      .GetValue(1) << " ";
   }
 
+  // print out a delta chain in readable manner
   void print_node_delta_chain(Node* node, size_t total_len) {
     // print out deltas added to this node in order
     for (int i = 0; i <= total_len; i++) {
@@ -1668,6 +1680,7 @@ class BWTree {
     }
   }
 
+  // print out necessary info for a node in readable manner (given Node*)
   void print_node_info(Node* node) {
     size_t total_len = node->delta_list_len;
     printf("pid - %lld, delta_chain_len: %ld, slotuse: %d  ", node->pid,
@@ -1679,6 +1692,7 @@ class BWTree {
     printf("\n");
   }
 
+  // print out necessary info for a node in readable manner (given PID)
   void print_node_info(PidType pid) {
     Node* node = mapping_table.get(pid);
     size_t total_len = node->delta_list_len;

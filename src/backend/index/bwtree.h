@@ -1415,8 +1415,9 @@ class BWTree {
               }
 
               if (tmpvals.size() != recordDelta->slotuse) {
-                printf("tmpvals.size() = %lu\n", tmpvals.size());
-                print_node_info(recordDelta);
+                //                printf("tmpvals.size() = %lu\n",
+                //                tmpvals.size());
+                //                print_node_info(recordDelta);
                 LOG_ERROR("tmpvals.size() != recordDelta->slotuse");
                 assert(tmpvals.size() == recordDelta->slotuse);
               }

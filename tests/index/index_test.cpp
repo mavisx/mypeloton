@@ -385,7 +385,7 @@ TEST(IndexTests, MyMultiThreadedOnlyInsertTest) {
 
   // Parallel Test
   size_t num_threads = 20;
-  size_t scale_factor = 30;
+  size_t scale_factor = 10;
   LaunchParallelTest(num_threads, InsertTest, index.get(), pool, scale_factor);
 
   locations = index->ScanAllKeys();

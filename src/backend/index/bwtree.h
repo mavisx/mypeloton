@@ -25,7 +25,8 @@
 
 // macro for debug
 //#define MY_PRINT_DEBUG
-//#define TURN_ON_CONSOLIDATE
+//#define LEI_PRINT_DEBUG
+#define TURN_ON_CONSOLIDATE
 
 // in bytes
 #define BWTREE_NODE_SIZE 256
@@ -569,6 +570,13 @@ class BWTree {
     return m_value_equal(a, b);
   }
 
+  inline bool key_in_node(KeyType key, const Node& node){
+    return (
+        key_greaterequal(key, node.low_key, node.inf_lowkey)
+        && key_less(key, node.high_key, node.inf_highkey)
+    );
+  }
+
 
  private:
   KeyComparator m_key_less;
@@ -1002,10 +1010,64 @@ class BWTree {
     }
   }
 
+  void create_root(PidType cur_root, PidType new_node_pid,
+                   KeyType pivotal){
+    KeyType waste;
+    InnerNode* new_root_node =
+        new InnerNode(mapping_table, waste, waste, true, true);
+
+    new_root_node->slotuse = 1;
+    new_root_node->slotkey[0] = pivotal;
+    new_root_node->childid[0] = cur_root;
+    new_root_node->childid[1] = new_node_pid;
+    PidType new_root_pid = mapping_table.add(new_root_node);
+
+    if(new_root_pid == NULL_PID){
+      LOG_ERROR("can't add root pid in split");
+      assert(new_root_pid != NULL_PID);
+    }
+    root = new_root_pid;
+
+    int i=0;
+    while(!std::atomic_compare_exchange_strong(
+        (std::atomic<PidType>*)&root,
+        &cur_root,
+        new_root_pid)
+        ){
+      //LOG_ERROR("wanner add root node, but root node changed before");
+      assert(i++ < 5);
+    }
+    LOG_INFO("new root = %llu, created", new_root_pid);
+    return;
+  }
+
+  Node* find_parent(KeyType key, std::stack<PidType>& path,
+                    const std::vector<PidType>& visited_nodes){
+    PidType parent_pid = path.top();
+    Node* parent_node =  mapping_table.get(parent_pid);
+    LOG_INFO("parent = %llu, got from path", parent_pid);
+
+    while(!key_in_node(key, *parent_node)){
+      LOG_INFO("in split insert Entry, parent changed!");
+      path = search(BWTree::root, key);
+      for(int i = visited_nodes.size()-1; i>=0; i--){
+        if(visited_nodes[i] != path.top()){
+          LOG_ERROR("In re-find parent, children changed");
+          assert(visited_nodes[i] == path.top());
+        }
+        path.pop();
+      }
+      parent_pid = path.top();
+      parent_node =  mapping_table.get(parent_pid);
+    }
+    return parent_node;
+  }
+
   // perform split for the leaf node containing key
   // It will iterativelyy split parent node if necessary
   void split(KeyType key) {
     std::stack<PidType> path = search(BWTree::root, key);
+    std::vector<PidType> visited_nodes;
 
     PidType check_split_pid = path.top();
     path.pop();
@@ -1014,7 +1076,9 @@ class BWTree {
     // Step1: Check if we need to split
     while (check_split_node->need_split()) {
       LOG_INFO("pid = %llu, begin Split", check_split_pid);
+
       // Step 1.1 add splitDelta to current check_split_node
+
       SplitDelta* new_split;
       KeyType pivotal;
 
@@ -1049,9 +1113,17 @@ class BWTree {
         continue;
       }
 
+      if(key_greaterequal(key,pivotal,false)) {
+        visited_nodes.push_back(new_node_pid);
+      } else {
+        visited_nodes.push_back(check_split_pid);
+      }
+
+
       if (check_split_node->is_leaf) {
         LOG_INFO("pid = %llu, Split finished, new leaf node %llu created",
                  check_split_pid, new_node_pid);
+
 #ifdef MY_PRINT_DEBUG
         print_node_info(check_split_pid);
         print_node_info(new_node_pid);
@@ -1066,56 +1138,29 @@ class BWTree {
       }
 
 #ifdef TURN_ON_CONSOLIDATE
-      check_split_node = mapping_table.get(check_split_pid);
       // check if we need to consolidate
       consolidate(check_split_pid);
 #endif
 
-      // Step 1.2 update our check_split_node as its parent (or create new root)
+      //check if we need to create new root)
       if (path.empty()) {
         // create new root
-
-        KeyType waste;
-        InnerNode* new_root =
-            new InnerNode(mapping_table, waste, waste, true, true);
-        new_root->childid[0] = check_split_pid;
-        check_split_pid = mapping_table.add(new_root);
-
-        if(check_split_pid == NULL_PID){
-          LOG_ERROR("can't add root pid in split");
-          assert(check_split_pid != NULL_PID);
-        }
-
-        if(root != new_root->childid[0]){
-          LOG_ERROR("wanner add root node, but root node changed before");
-          assert(root == new_root->childid[0]);
-        }
-
-        root = check_split_pid;
-        LOG_INFO("new root = %llu, created", root);
-      } else {
-        // get the father node
-        check_split_pid = path.top();
-        path.pop();
-        LOG_INFO("parent = %llu, got from path", check_split_pid);
+        create_root(check_split_pid, new_node_pid, pivotal);
+        return;
       }
 
-#ifdef TURN_ON_CONSOLIDATE
-      //consolidate(check_split_pid);
-#endif
+//#ifdef TURN_ON_CONSOLIDATE
+//      consolidate(check_split_pid);
+//#endif
 
-      // Step 1.3 add indexEntryDelta to current check_split_node
+      // Step 1.2 update our check_split_node as its parent
+      // Step 1.3 add indexEntryDelta to the parent node(check_split_node)
       bool redo = true;
       while (redo) {
-        check_split_node = mapping_table.get(check_split_pid);
-
-        if((!key_greaterequal(key, check_split_node->low_key,
-                              check_split_node->inf_lowkey)) ||
-            (!key_less(key, check_split_node->high_key,
-                       check_split_node->inf_highkey))){
-          LOG_ERROR("in split insert Entry, parent changed!");
-          assert(0);
-        }
+        // get the parent node
+        check_split_node = find_parent(key,path,visited_nodes);
+        check_split_pid = check_split_node->pid;
+        LOG_INFO("finding parent = %llu", check_split_pid);
 
         IndexEntryDelta* new_indexEntryDelta = new IndexEntryDelta(
             check_split_node, new_split->Kp, new_node->high_key,
@@ -1134,6 +1179,7 @@ class BWTree {
                               new_indexEntryDelta)) {
           LOG_INFO("new indexEntryDelta added to pid = %llu", check_split_pid);
           redo = false;
+          path.pop();
         } else {
           LOG_INFO("CAS FAIL: redo add indexEntryDelta");
           delete new_indexEntryDelta;
@@ -1158,13 +1204,18 @@ class BWTree {
 
   // insert a (key, value) pair into our bwtree
   bool insert_entry(KeyType key, ValueType value) {
-    // Step1: perform split if necessary
-    split(key);
+#ifdef LEI_PRINT_DEBUG
+    LOG_TRACE("-----Entering insert_entry, key:");
+    print_key_info(key);
+#endif
 
-    // Step2: Add the insert record delta to current delta chain
-    // update the basic_node before adding record delta
     bool redo = true;
     while (redo) {
+      // Step1: perform split if necessary
+      split(key);
+
+      // Step2: Add the insert record delta to current delta chain
+      // update the basic_node before adding record delta
       std::stack<PidType> path = search(BWTree::root, key);
 
       PidType basic_pid = path.top();
@@ -1172,6 +1223,7 @@ class BWTree {
 #ifdef TURN_ON_CONSOLIDATE
       // Check whether we need to consolidate, also check split correctness
       Node* basic_node = consolidate(basic_pid);
+      if(basic_node == nullptr) continue;
 #else
       Node* basic_node = mapping_table.get(basic_pid);
 #endif
@@ -1193,7 +1245,6 @@ class BWTree {
       new_delta->pid = basic_pid;
       if (!key_dup) new_delta->slotuse = new_delta->next->slotuse + 1;
 
-      basic_node = mapping_table.get(basic_pid);
       new_delta->high_key = basic_node->high_key;
       new_delta->low_key = basic_node->low_key;
 
@@ -1201,9 +1252,14 @@ class BWTree {
       if (redo) {
         LOG_INFO("CAS FAIL: redo add insert record");
         delete new_delta;
+      }else{
+#ifdef LEI_PRINT_DEBUG
+        LOG_TRACE("-----Success add a new insert record delta,%lld-----",basic_pid);
+        print_node_info(new_delta);
+#endif
       }
-      LOG_INFO("success add a new insert record delta, current delta len = %lu",
-               mapping_table.get(basic_pid)->delta_list_len);
+
+
     }
     //    print_node_info(basic_pid);
 
@@ -1212,14 +1268,15 @@ class BWTree {
 
   // delete a (key, value) pair from our bwtree
   bool delete_entry(KeyType key, ValueType value) {
-    // Step1: perform split if necessary
-    split(key);
 
-    // Step3: Add the insert record delta to current delta chain
+
     // update the basic_node before adding record delta
     bool redo = true;
     // check and insert delete delta
     while (redo) {
+      // Step1: perform split if necessary
+      split(key);
+
       // search again to make sure we are deleting from the correct node
       std::stack<PidType> path = search(root, key);
 
@@ -1230,6 +1287,7 @@ class BWTree {
       // Check whether we need to consolidate, also check the correctness of
       // previous split
       Node* basic_node = consolidate(basic_pid);
+      if(basic_node == nullptr) continue;
 #else
       Node* basic_node = mapping_table.get(basic_pid);
 #endif
@@ -1253,6 +1311,7 @@ class BWTree {
 
       bool deletekey = (tv_count_pair.second == tv_count_pair.first);
 
+      // Step3: Add the delete record delta to current delta chain
       //      printf("before append_delete\n");
       redo = !append_delete(basic_node, key, value, deletekey);
       //      printf("after append_delete\n");
@@ -1301,7 +1360,12 @@ class BWTree {
         if (mapping_table.set(pid, orinode, new_leaf)) {
           while (garbage_table.add(orinode) == NULL_PID)
             ;
-          LOG_INFO("leaf consolidation finished!");
+#ifdef LEI_PRINT_DEBUG
+          LOG_TRACE("-----leaf consolidation finished! %lld, old------",pid);
+          print_node_info(orinode);
+          LOG_TRACE("-----leaf consolidation finished! %lld,------",pid);
+          print_node_info(new_leaf);
+#endif
           return new_leaf;
         } else {
           print_node_info(orinode);
@@ -1340,7 +1404,8 @@ class BWTree {
         if (mapping_table.set(pid, orinode, new_inner)) {
           while (garbage_table.add(orinode) == NULL_PID)
             ;
-          LOG_INFO("inner consolidation finished!");
+          LOG_INFO("-----inner consolidation finished! %lld------",pid);
+          print_node_info(new_inner);
           return new_inner;
         } else {
           delete new_inner;
@@ -1353,12 +1418,11 @@ class BWTree {
       orinode = mapping_table.get(pid);
       if (orinode->need_split()) {
         LOG_ERROR("From consolidate: invalid split check");
-        assert(0);
+        return nullptr;
       }
       // TODO: delete this break and let the loop work
       //break;
     }
-    LOG_INFO("consolidation return");
     return orinode;
   }
 
@@ -1394,7 +1458,7 @@ class BWTree {
       tmpvals.push_back(std::vector<ValueType>(*(orig_leaf_node->slotdata[i])));
     }
 
-    LOG_INFO("Leaf Consolidate: delta_chain.len = %lu", delta_chain.size());
+    //LOG_INFO("Leaf Fake Consolidate: delta_chain.len = %lu", delta_chain.size());
 
     // traverse the delta chain
     while (!delta_chain.empty()) {
@@ -1406,10 +1470,15 @@ class BWTree {
           // first see the key has already existed
           bool no_key = true;
           RecordDelta* recordDelta = static_cast<RecordDelta*>(cur_delta);
+          //printf("\t pid:%llu, Consolidation meet key: ", recordDelta->pid);
 
           if (recordDelta->op_type == RecordDelta::INSERT) {
             for (int x = 0; x < tmpkeys.size(); x++) {
               if (key_equal(tmpkeys[x], recordDelta->key)) {
+#ifdef LEI_PRINT_DEBUG
+                print_key_info(recordDelta->key);
+                printf("\n");
+#endif
                 tmpvals[x].push_back(recordDelta->value);
                 no_key = false;
                 break;
@@ -1419,6 +1488,11 @@ class BWTree {
             // key not exists, need to insert somewhere
             if (no_key) {
               if (recordDelta->slotuse == 0) {
+#ifdef LEI_PRINT_DEBUG
+                printf("\t pid:%llu, Consolidation add new key: ", recordDelta->pid);
+                print_key_info(recordDelta->key);
+                printf("\n");
+#endif
                 tmpkeys.push_back(recordDelta->key);
                 tmpvals.push_back(
                     std::vector<ValueType>(1, recordDelta->value));
@@ -1514,7 +1588,7 @@ class BWTree {
       }
     }
 
-    LOG_INFO("Leaf Consolodaye finish: %lu keys, %lu vals", tmpkeys.size(),
+    LOG_INFO("Leaf fake Consolidation finish: %lu keys, %lu vals", tmpkeys.size(),
              tmpvals.size());
     return std::make_pair(tmpkeys, tmpvals);
   }
@@ -1661,6 +1735,9 @@ class BWTree {
   // interface for scanning all values in the bwtree and put them into
   // a result vector
   void scan_all(std::vector<ValueType>& v) {
+#ifdef LEI_PRINT_DEBUG
+    LOG_TRACE("-----------IN SCAN ALL:----------");
+#endif
     Node* node = mapping_table.get(headleaf);
 
     // scan the leaf nodes list from begin to the end
@@ -1669,6 +1746,12 @@ class BWTree {
 
       LOG_INFO("fake_consolidate size: %lu", all_key_value_pair.second.size());
 
+#ifdef LEI_PRINT_DEBUG
+      for(int i =0; i< (all_key_value_pair.first).size();i++){
+        print_key_info(all_key_value_pair.first[i]);
+        printf(" %lu\n",all_key_value_pair.second[i].size());
+      }
+#endif
       for (auto const& value : all_key_value_pair.second) {
         v.insert(v.end(), value.begin(), value.end());
       }
@@ -1728,6 +1811,7 @@ class BWTree {
         printf("leaf");
         for(int i = 0; i<node->slotuse;i++){
           print_key_info(((LeafNode*)node)->slotkey[i]);
+          printf(" %lu",(((LeafNode*)node)->slotdata[i])->size());
           printf("\n");
         }
       } else if (node->node_type == INNER) {

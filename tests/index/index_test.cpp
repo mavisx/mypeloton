@@ -21,12 +21,12 @@
 namespace peloton {
 namespace test {
 
-#define BASIC_TEST
-#define DELETE_TEST
-#define DELETE_TEST2
-#define MULTI_INSERT_TEST
+//#define BASIC_TEST
+//#define DELETE_TEST
+//#define DELETE_TEST2
+//#define MULTI_INSERT_TEST
 #define MY_MULTI_TEST
-#define MY_MULTI_TEST_ONLY_INSERT
+//#define MY_MULTI_TEST_ONLY_INSERT
 //===--------------------------------------------------------------------===//
 // Index Tests
 //===--------------------------------------------------------------------===//

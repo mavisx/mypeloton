@@ -35,9 +35,7 @@ BWTreeIndex<KeyType, ValueType, KeyComparator, KeyEqualityChecker>::BWTreeIndex(
 template <typename KeyType, typename ValueType, class KeyComparator,
           class KeyEqualityChecker>
 BWTreeIndex<KeyType, ValueType, KeyComparator,
-            KeyEqualityChecker>::~BWTreeIndex() {
-  // Add your implementation here
-}
+            KeyEqualityChecker>::~BWTreeIndex() {}
 
 template <typename KeyType, typename ValueType, class KeyComparator,
           class KeyEqualityChecker>

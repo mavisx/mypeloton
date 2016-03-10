@@ -27,6 +27,7 @@
 //#define MY_PRINT_DEBUG
 //#define LEI_PRINT_DEBUG
 #define TURN_ON_CONSOLIDATE
+#define BINARY_SEARCH
 
 // in bytes
 #define BWTREE_NODE_SIZE 256
@@ -373,7 +374,6 @@ class BWTree {
         if (slotdata[i] != nullptr) delete slotdata[i];
       }
     }
-
   };
 
   // Delta Node for record update operation
@@ -530,7 +530,6 @@ class BWTree {
   // destructor
   ~BWTree(){};
 
-
  public:
   // True if a < b ? "constructed" from m_key_less()
   inline bool key_less(const KeyType& a, const KeyType b,
@@ -611,28 +610,14 @@ class BWTree {
     return path;
   }
 
-
   // The helping funtion for the above search function
   PidType search(Node* node, KeyType key, std::stack<PidType>& path) {
     // should always keep track of right key range even in delta node
     PidType pid;
-    //    if(key < node->low_key || key >= node->high_key) {
-    //      LOG_ERROR("Search Range Err: key not in range");
-    //      return -1;
-    //    }
+
     switch (node->node_type) {
       case LEAF:
       case RECORD_DELTA: {
-        //        if (node->node_type == LEAF) {
-        //          LOG_INFO("Search Range Info: meet a leaf, pid: %lld, slotuse
-        //          %d",
-        //                   node->pid, node->slotuse);
-        //        } else {
-        //          LOG_INFO("Search Range Info: meet a record, pid: %lld,
-        //          slotuse %d",
-        //                   node->pid, node->slotuse);
-        //        }
-
         return node->pid;
       }
       case INDEX_ENTRY_DELTA:
@@ -653,8 +638,6 @@ class BWTree {
         return search(node->next, key, path);
       }
       case REMOVE_NODE_DELTA: {
-        //        LOG_INFO("Search Range Info: meet a removed node");
-
         path.pop();
         if (path.empty()) {
           LOG_INFO("Search Path empty");
@@ -671,8 +654,6 @@ class BWTree {
         }
       }
       case MERGE_DELTA: {
-        //        LOG_INFO("Search Range Info: meet merge delta");
-
         if (key_greaterequal(key, ((MergeDelta*)node)->Kp, false)) {
           node = ((MergeDelta*)node)->orignal_node;
           if (node == nullptr) {
@@ -685,15 +666,14 @@ class BWTree {
         return search(node->next, key, path);
       }
       case SPLIT_DELTA: {
-        //        LOG_INFO("Search Range Info: meet split/merge delta");
         pid = ((SplitDelta*)node)->pQ;
         if (key_greaterequal(key, ((SplitDelta*)node)->Kp, false)) {
-          // TODO: should
           node = mapping_table.get(pid);
           if (node == nullptr) {
             LOG_ERROR("pid in split/merge delta not exist");
             return -1;
           }
+
           // replace the top with our split node
           path.pop();
           path.push(pid);
@@ -702,9 +682,11 @@ class BWTree {
         return search(node->next, key, path);
       }
       case INNER: {
+        InnerNode* innerNode = static_cast<InnerNode*>(node);
+
         if (node->slotuse == 0) {
-          //          LOG_INFO("empty inner node");
-          pid = ((InnerNode*)node)->childid[0];
+          // if it is empty, the node we earch should be its first child
+          pid = innerNode->childid[0];
           if (pid == NULL_PID) {
             LOG_ERROR("error leftmost pid -- NULL_PID");
             return -1;
@@ -719,12 +701,28 @@ class BWTree {
 
           return search(node, key, path);
         } else {
+#ifdef BINARY_SEARCH
+          // binary search the min inner key who is > our target key
+          int left = 0, right = node->slotuse - 1;
+          int middle;
+          while (left <= right) {
+            middle = (left + right) / 2;
+
+            if (key_greater(innerNode->slotkey[middle], key, false)) {
+              right = middle - 1;
+            } else {
+              left = middle + 1;
+            }
+          }
+          pid = innerNode->childid[left];
+#else
           int i = 0;
           for (i = 0; i < node->slotuse; i++) {
-            if (key_less(key, ((InnerNode*)node)->slotkey[i], false))
-              break;  // 0, 1 ,2
-          }           // 0  1  2  3
-          pid = ((InnerNode*)node)->childid[i];
+            if (key_less(key, innerNode->slotkey[i], false)) break;  // 0, 1 ,2
+          }  // 0  1  2  3
+          pid = innerNode->childid[i];
+#endif
+
           node = mapping_table.get(pid);
           if (node == nullptr) {
             LOG_ERROR("pid in inner node not exist");
@@ -745,7 +743,6 @@ class BWTree {
     return key_is_in(key, listhead, deleted_set);
   };
 
-
   // the helping function for above function
   int key_is_in(KeyType key, Node* listhead, DelSet& deleted) {
     if (listhead == nullptr) return 0;
@@ -764,11 +761,29 @@ class BWTree {
         return key_is_in(key, node->next, deleted);
       }
       case LEAF: {
-        //TODO: correct the slotuse, should not use the one in node
-        LeafNode* lf_node = (LeafNode*)node;
+        LeafNode* lf_node = static_cast<LeafNode*>(node);
+#ifdef BINARY_SEARCH
+        int left = 0, right = lf_node->slotuse - 1;
+        int middle;
+
+        while (left <= right) {
+          middle = (left + right) / 2;
+          if (key_less(lf_node->slotkey[middle], key, false)) {
+            left = middle + 1;
+          } else if (key_greater(lf_node->slotkey[middle], key, false)) {
+            right = middle - 1;
+          } else {
+            for (auto val : *(lf_node->slotdata[middle])) {
+              if (!deleted.count(val)) {
+                return 1;
+              }
+            }
+          }
+        }
+#else
         for (int i = 0; i < (lf_node->slotuse); i++) {
           if (key_equal(lf_node->slotkey[i], key)) {
-            for (auto val : (*lf_node->slotdata[i])) {
+            for (auto val : *(lf_node->slotdata[i])) {
               if (!deleted.count(val)) {
                 return 1;
               }
@@ -776,6 +791,7 @@ class BWTree {
             return 0;
           }
         }
+#endif
         return 0;
       }
       case MERGE_DELTA: {
@@ -787,12 +803,12 @@ class BWTree {
       }
       case SPLIT_DELTA: {
         if (key_greaterequal(key, ((SplitDelta*)node)->Kp, false)) {
-//          PidType pid = ((SplitDelta*)node)->pQ;
-//          return key_is_in(key, mapping_table.get(pid), deleted);
+          //          PidType pid = ((SplitDelta*)node)->pQ;
+          //          return key_is_in(key, mapping_table.get(pid), deleted);
           LOG_INFO("Key is in, be in wrong split branch\n");
           return -1;
-          //fflush(stdout);
-          //assert(!key_greaterequal(key, ((SplitDelta*)node)->Kp, false));
+          // fflush(stdout);
+          // assert(!key_greaterequal(key, ((SplitDelta*)node)->Kp, false));
         }
         return key_is_in(key, node->next, deleted);
       }
@@ -814,30 +830,49 @@ class BWTree {
     while (node != nullptr) {
       switch (node->node_type) {
         case RECORD_DELTA: {
-          // TODO : this part is buggy!
           len++;
           RecordDelta* rcd_node = static_cast<RecordDelta*>(node);
           if (rcd_node->op_type == RecordDelta::INSERT) {
             if (key_equal(rcd_node->key, key) &&
                 (!deleted.count(rcd_node->value))) {
+              // update the total count and pair count
               total_count++;
               if (value_equal(rcd_node->value, value)) {
                 pair_count++;
               }
-              //              printf("count_pair after inserting!\n");
+
             }
           } else if (rcd_node->op_type == RecordDelta::DELETE &&
                      key_equal(rcd_node->key, key)) {
-            //            printf("count_pair before delete!\n");
+            // add the deleted value to the delSet
             deleted.insert(rcd_node->value);
-            //            printf("count_pair after delete!\n");
           }
           node = node->next;
-          // TODO : this part is buggy!
           break;
         }
         case LEAF: {
           LeafNode* lf_node = static_cast<LeafNode*>(node);
+
+#ifdef BINARY_SEARCH
+          int left = 0, right = lf_node->slotuse - 1;
+          int middle;
+
+          while (left <= right) {
+            middle = (left + right) / 2;
+            if (key_less(lf_node->slotkey[middle], key, false)) {
+              left = middle + 1;
+            } else if (key_greater(lf_node->slotkey[middle], key, false)) {
+              right = middle - 1;
+            } else {
+              for (ValueType v : *(lf_node->slotdata[middle])) {
+                if (deleted.count(v)) continue;
+                total_count++;
+                if (value_equal(v, value)) pair_count++;
+              }
+              break;
+            }
+          }
+#else
           for (int i = 0; i < (lf_node->slotuse); i++) {
             if (key_equal(lf_node->slotkey[i], key)) {
               for (ValueType v : *(lf_node->slotdata[i])) {
@@ -848,6 +883,8 @@ class BWTree {
               break;
             }
           }
+#endif
+
           if (node->next != nullptr) {
             LOG_ERROR("leaf.next != null");
             assert(node->next == nullptr);
@@ -865,13 +902,12 @@ class BWTree {
         }
         case SPLIT_DELTA: {
           if (key_greaterequal(key, ((SplitDelta*)node)->Kp, false)) {
-//            PidType pid = ((SplitDelta*)node)->pQ;
-//            node = mapping_table.get(pid);
+            //            PidType pid = ((SplitDelta*)node)->pQ;
+            //            node = mapping_table.get(pid);
             LOG_ERROR("Error in count pair, be in wrong split branch\n");
             total_count = pair_count = -1;
             node = nullptr;
-            //fflush(stdout);
-            //assert(!key_greaterequal(key, ((SplitDelta*)node)->Kp, false));
+            // assert(!key_greaterequal(key, ((SplitDelta*)node)->Kp, false));
           } else {
             node = node->next;
           }
@@ -885,7 +921,6 @@ class BWTree {
 
     return std::pair<int, int>(total_count, pair_count);
   }
-
 
   // append a delete detla for deleting (key, value) from a delta chain
   // whose head is basic_node.
@@ -911,10 +946,7 @@ class BWTree {
     };
   }
 
-  bool apend_merge() {
-    // TODO: A lot
-    return false;
-  }
+  bool apend_merge() { return false; }
 
   // prepend a delta_node to orig_node and increment the delta_list_len
   inline static bool prepend(Node* delta_node, Node* orig_node) {
@@ -965,6 +997,27 @@ class BWTree {
         } break;
         case LEAF: {
           LeafNode* leaf = static_cast<LeafNode*>(next);
+
+#ifdef BINARY_SEARCH
+          int left = 0, right = leaf->slotuse - 1;
+          int middle;
+
+          while (left <= right) {
+            middle = (left + right) / 2;
+            if (key_less(leaf->slotkey[middle], key, false)) {
+              left = middle + 1;
+            } else if (key_greater(leaf->slotkey[middle], key, false)) {
+              right = middle - 1;
+            } else {
+              unsigned long vsize = leaf->slotdata[middle]->size();
+              for (int j = 0; j < vsize; j++) {
+                if (delset.find(leaf->slotdata[middle]->at(j)) == delset.end())
+                  result.push_back(leaf->slotdata[middle]->at(j));
+              }
+              break;
+            }
+          }
+#else
           for (int i = 0; i < leaf->slotuse; i++) {
             if (key_equal(leaf->slotkey[i], key)) {
               unsigned long vsize = leaf->slotdata[i]->size();
@@ -972,8 +1025,11 @@ class BWTree {
                 if (delset.find(leaf->slotdata[i]->at(j)) == delset.end())
                   result.push_back(leaf->slotdata[i]->at(j));
               }
+              break;
             }
           }
+#endif
+
           next = nullptr;
         } break;
         case SPLIT_DELTA: {
@@ -1073,11 +1129,10 @@ class BWTree {
     path.pop();
     Node* check_split_node = mapping_table.get(check_split_pid);
 
-    // Step1: Check if we need to split
+    // Check if we need to split
     while (check_split_node->need_split()) {
       LOG_INFO("pid = %llu, begin Split", check_split_pid);
-
-      // Step 1.1 add splitDelta to current check_split_node
+      // Step 1 add splitDelta to current check_split_node
 
       SplitDelta* new_split;
       KeyType pivotal;
@@ -1142,7 +1197,7 @@ class BWTree {
       consolidate(check_split_pid);
 #endif
 
-      //check if we need to create new root)
+      // Step 2 update our check_split_node as its parent (or create new root)
       if (path.empty()) {
         // create new root
         create_root(check_split_pid, new_node_pid, pivotal);
@@ -1154,7 +1209,7 @@ class BWTree {
 //#endif
 
       // Step 1.2 update our check_split_node as its parent
-      // Step 1.3 add indexEntryDelta to the parent node(check_split_node)
+      // Step 3 add indexEntryDelta to current check_split_node
       bool redo = true;
       while (redo) {
         // get the parent node
@@ -1162,18 +1217,13 @@ class BWTree {
         check_split_pid = check_split_node->pid;
         LOG_INFO("finding parent = %llu", check_split_pid);
 
+
         IndexEntryDelta* new_indexEntryDelta = new IndexEntryDelta(
             check_split_node, new_split->Kp, new_node->high_key,
             new_node->inf_highkey, new_split->pQ, mapping_table,
             check_split_node->next_leafnode, check_split_node->low_key,
             check_split_node->high_key, check_split_node->inf_lowkey,
             check_split_node->inf_highkey);
-
-        //        std::cout << "indexEntryDelta Kp: " <<
-        //            new_indexEntryDelta->Kp.GetTupleForComparison(m_metadata->GetKeySchema()).GetValue(0)
-        //            << "," <<
-        //            new_indexEntryDelta->Kp.GetTupleForComparison(m_metadata->GetKeySchema()).GetValue(1)
-        //            << " pQ = "<< new_indexEntryDelta->pQ << std::endl;
 
         if (mapping_table.set(check_split_pid, check_split_node,
                               new_indexEntryDelta)) {
@@ -1199,7 +1249,6 @@ class BWTree {
       print_node_info(check_split_pid);
 #endif
     }
-
   }
 
   // insert a (key, value) pair into our bwtree
@@ -1229,7 +1278,7 @@ class BWTree {
 #endif
 
       int key_dup = key_is_in(key, basic_node);
-      if(key_dup == -1) continue;
+      if (key_dup == -1) continue;
 
       // check whether we can insert duplicate key
       if (m_metadata->HasUniqueKeys()) {
@@ -1261,7 +1310,6 @@ class BWTree {
 
 
     }
-    //    print_node_info(basic_pid);
 
     return true;
   }
@@ -1314,11 +1362,8 @@ class BWTree {
       // Step3: Add the delete record delta to current delta chain
       //      printf("before append_delete\n");
       redo = !append_delete(basic_node, key, value, deletekey);
-      //      printf("after append_delete\n");
     }
-    // TODO:apend merge_delta
-    // TODO:apend delete_index_term_delta
-    //    print_node_info(basic_pid);
+
     return true;
   };
 
@@ -1368,8 +1413,8 @@ class BWTree {
 #endif
           return new_leaf;
         } else {
-          print_node_info(orinode);
-          print_node_info(new_leaf);
+          //          print_node_info(orinode);
+          //          print_node_info(new_leaf);
           delete new_leaf;
           LOG_INFO(
               "CAS FAIL: unnecessary consolidate, remove just created "
@@ -1421,11 +1466,10 @@ class BWTree {
         return nullptr;
       }
       // TODO: delete this break and let the loop work
-      //break;
+      // break;
     }
     return orinode;
   }
-
 
   // helper function to consolidate a leaf node and return the
   // resulting vector of keys and values
@@ -1473,6 +1517,24 @@ class BWTree {
           //printf("\t pid:%llu, Consolidation meet key: ", recordDelta->pid);
 
           if (recordDelta->op_type == RecordDelta::INSERT) {
+#ifdef BINARY_SEARCH
+            int left = 0, right = (int)tmpkeys.size() - 1;
+            int middle;
+
+            while (left <= right) {
+              middle = (left + right) / 2;
+              if (key_less(tmpkeys[middle], recordDelta->key, false)) {
+                left = middle + 1;
+              } else if (key_greater(tmpkeys[middle], recordDelta->key,
+                                     false)) {
+                right = middle - 1;
+              } else {
+                tmpvals[middle].push_back(recordDelta->value);
+                no_key = false;
+                break;
+              }
+            }
+#else
             for (int x = 0; x < tmpkeys.size(); x++) {
               if (key_equal(tmpkeys[x], recordDelta->key)) {
 #ifdef LEI_PRINT_DEBUG
@@ -1484,6 +1546,7 @@ class BWTree {
                 break;
               }
             }
+#endif
 
             // key not exists, need to insert somewhere
             if (no_key) {
@@ -1498,12 +1561,29 @@ class BWTree {
                     std::vector<ValueType>(1, recordDelta->value));
               } else {
                 int target_pos = 0;
+
+#ifdef BINARY_SEARCH
+                // binary search largest key in tmpkeys who is <=
+                // recordDelta->key
+                int left = 0, right = (int)tmpkeys.size() - 1;
+                int middle;
+                while (left <= right) {
+                  middle = (left + right) / 2;
+                  if (key_lessequal(tmpkeys[middle], recordDelta->key, false)) {
+                    left = middle + 1;
+                  } else {
+                    right = middle - 1;
+                  }
+                }
+                target_pos = left;
+#else
                 for (int x = ((int)tmpkeys.size()) - 1; x >= 0; x--) {
                   if (key_greaterequal(recordDelta->key, tmpkeys[x], false)) {
                     target_pos = x + 1;
                     break;
                   }
                 }
+#endif
 
                 tmpkeys.insert(tmpkeys.begin() + target_pos, recordDelta->key);
                 tmpvals.insert(tmpvals.begin() + target_pos,
@@ -1511,19 +1591,40 @@ class BWTree {
               }
 
               if (tmpvals.size() != recordDelta->slotuse) {
-                printf("tmpvals.size() = %lu,tempkets.size() = %lu\n", tmpvals.size(),tmpkeys.size());
-                for(auto tk:tmpkeys){
-                  print_key_info(tk);
-                  printf("\n");
-                }
-                printf("---------------In the mean time------------------\n");
-                print_node_info(recordDelta);
                 LOG_ERROR("tmpvals.size() != recordDelta->slotuse");
                 assert(tmpvals.size() == recordDelta->slotuse);
               }
             }  // end of RecordDelta::INSERT
 
           } else if (recordDelta->op_type == RecordDelta::DELETE) {
+#ifdef BINARY_SEARCH
+            int left = 0, right = (int)tmpkeys.size() - 1;
+            int middle;
+
+            while (left <= right) {
+              middle = (left + right) / 2;
+              if (key_less(tmpkeys[middle], recordDelta->key, false)) {
+                left = middle + 1;
+              } else if (key_greater(tmpkeys[middle], recordDelta->key,
+                                     false)) {
+                right = middle - 1;
+              } else {
+                // remove value in the vector
+                for (int j = ((int)tmpvals[middle].size() - 1); j >= 0; j--) {
+                  if (m_value_equal(tmpvals[middle][j], recordDelta->value)) {
+                    tmpvals[middle].erase(tmpvals[middle].begin() + j);
+                  }
+                }
+
+                // if vector is empty, needed to be removed
+                if (tmpvals[middle].size() == 0) {
+                  tmpkeys.erase(tmpkeys.begin() + middle);
+                  tmpvals.erase(tmpvals.begin() + middle);
+                }
+                break;
+              }
+            }
+#else
             for (int x = 0; x < tmpkeys.size(); x++) {
               if (key_equal(tmpkeys[x], recordDelta->key)) {
                 // remove value in the vector
@@ -1541,9 +1642,8 @@ class BWTree {
                 break;
               }
             }
+#endif
             if (tmpvals.size() != recordDelta->slotuse) {
-              printf("tmpvals.size() = %lu\n", tmpvals.size());
-              print_node_info(recordDelta);
               LOG_ERROR("tmpvals.size() != recordDelta->slotuse");
               assert(tmpvals.size() == recordDelta->slotuse);
             }
@@ -1552,23 +1652,37 @@ class BWTree {
         }
         case SPLIT_DELTA: {
           SplitDelta* splitDelta = static_cast<SplitDelta*>(cur_delta);
-          // truncate all the values whose key is >= Kp
+// truncate all the values whose key is >= Kp
+#ifdef BINARY_SEARCH
+          // binary search the min key in tmpkeys that >= splitDelta->Kp
+          int left = 0, right = (int)tmpkeys.size() - 1;
+          int middle;
+          while (left <= right) {
+            middle = (left + right) / 2;
+            if (key_greaterequal(tmpkeys[middle], splitDelta->Kp, false)) {
+              right = middle - 1;
+            } else {
+              left = middle + 1;
+            }
+          }
+          tmpkeys.resize(left);
+          tmpvals.resize(left);
+          LOG_INFO("split consolidation resize: size = %lu ,i =  %d",
+                   tmpvals.size(), left);
+
+#else
           for (int i = 0; i < tmpkeys.size(); i++) {
             if (key_greaterequal(tmpkeys[i], splitDelta->Kp, false)) {
               tmpkeys.resize(i);
               tmpvals.resize(i);
-              LOG_INFO("split consolidation resize: size = %lu ,i =  %d",tmpvals.size(),i);
+              LOG_INFO("split consolidation resize: size = %lu ,i =  %d",
+                       tmpvals.size(), i);
               break;
             }
           }
+#endif
+
           if (tmpvals.size() != splitDelta->slotuse) {
-            printf("tmpvals.size() = %lu,tempkets.size() = %lu\n", tmpvals.size(),tmpkeys.size());
-            for(auto tk:tmpkeys){
-              print_key_info(tk);
-              printf("\n");
-            }
-            printf("---------------In the mean time------------------\n");
-            print_node_info(splitDelta);
             LOG_ERROR("tmpvals.size() != recordDelta->slotuse");
             assert(tmpvals.size() == splitDelta->slotuse);
           }
@@ -1693,7 +1807,7 @@ class BWTree {
     *pivotal = new_leaf->slotkey[0];
     PidType new_leaf_pid = mapping_table.add(new_leaf);
 
-    if(new_leaf_pid == NULL_PID) {
+    if (new_leaf_pid == NULL_PID) {
       LOG_ERROR("can't add new_leaf_pid");
       assert(new_leaf_pid != NULL_PID);
     }
@@ -1723,14 +1837,13 @@ class BWTree {
     *pivotal = new_inner->slotkey[0];
     PidType new_inner_pid = mapping_table.add(new_inner);
 
-    if(new_inner_pid == NULL_PID) {
+    if (new_inner_pid == NULL_PID) {
       LOG_ERROR("can't add new_inner_pid");
       assert(new_inner_pid != NULL_PID);
     }
 
     return new_inner_pid;
   }
-
 
   // interface for scanning all values in the bwtree and put them into
   // a result vector
@@ -1805,11 +1918,12 @@ class BWTree {
         } else if (((RecordDelta*)node)->op_type == RecordDelta::DELETE)
           printf("delete->");
       } else if (node->node_type == SPLIT_DELTA) {
-        printf("split(%d,pQ=%llu)->", ((SplitDelta*)node)->slotuse,((SplitDelta*)node)->pQ);
+        printf("split(%d,pQ=%llu)->", ((SplitDelta*)node)->slotuse,
+               ((SplitDelta*)node)->pQ);
         print_key_info(((SplitDelta*)node)->Kp);
       } else if (node->node_type == LEAF) {
         printf("leaf");
-        for(int i = 0; i<node->slotuse;i++){
+        for (int i = 0; i < node->slotuse; i++) {
           print_key_info(((LeafNode*)node)->slotkey[i]);
           printf(" %lu",(((LeafNode*)node)->slotdata[i])->size());
           printf("\n");

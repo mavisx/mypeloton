@@ -27,10 +27,10 @@
 //#define MY_PRINT_DEBUG
 //#define LEI_PRINT_DEBUG
 #define TURN_ON_CONSOLIDATE
-#define BINARY_SEARCH
+//#define BINARY_SEARCH
 
 // in bytes
-#define BWTREE_NODE_SIZE 128
+#define BWTREE_NODE_SIZE 256
 
 #define BWTREE_MAX(a, b) ((a) < (b) ? (b) : (a))
 
@@ -107,12 +107,12 @@ class BWTree {
   // *** Static Constant Options and Values of the Bw Tree
   // Base B2 tree parameter: The number of key/data slots in each leaf
   static const unsigned short leafslotmax =
-      BWTREE_MAX(4, BWTREE_NODE_SIZE / (sizeof(KeyType) + sizeof(ValueType)));
+      BWTREE_MAX(8, BWTREE_NODE_SIZE / (sizeof(KeyType) + sizeof(ValueType)));
 
   // Base B+ tree parameter: The number of key slots in each inner node,
   // this can differ from slots in each leaf.
   static const unsigned short innerslotmax =
-      BWTREE_MAX(4, BWTREE_NODE_SIZE / (sizeof(KeyType) + sizeof(PidType)));
+      BWTREE_MAX(8, BWTREE_NODE_SIZE / (sizeof(KeyType) + sizeof(PidType)));
 
   // Computed B+ tree parameter: The minimum number of key/data slots used
   // in a leaf. If fewer slots are used, the leaf will be merged or slots

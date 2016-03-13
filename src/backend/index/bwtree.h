@@ -759,8 +759,8 @@ class BWTree {
       }
       case SPLIT_DELTA: {
         if (key_greaterequal(key, ((SplitDelta*)node)->Kp, false)) {
-          PidType pid = ((SplitDelta*)node)->pQ;
-          return key_is_in(key, mapping_table.get(pid), deleted);
+          LOG_ERROR("key is in should never reach here, split wrong branch");
+          assert(0);
         }
         return key_is_in(key, node->next, deleted);
       }
@@ -836,8 +836,8 @@ class BWTree {
         }
         case SPLIT_DELTA: {
           if (key_greaterequal(key, ((SplitDelta*)node)->Kp, false)) {
-            PidType pid = ((SplitDelta*)node)->pQ;
-            node = mapping_table.get(pid);
+            LOG_ERROR("count pair should never reach here, split wrong branch");
+            assert(0);
           } else {
             node = node->next;
           }
@@ -1102,9 +1102,7 @@ class BWTree {
 
 #ifdef TURN_ON_CONSOLIDATE
       // check if we need to consolidate
-      if (check_split_node->delta_list_len > MAX_DELTA_CHAIN_LEN) {
-        consolidate(check_split_pid);
-      }
+      consolidate(check_split_pid);
 #endif
 
       // Step 2, update our check_split_node as its parent (or create new root)
@@ -1143,24 +1141,14 @@ class BWTree {
         }
       }
 
+      check_split_node = mapping_table.get(check_split_pid);
 #ifdef TURN_ON_CONSOLIDATE
-      check_split_node = mapping_table.get(check_split_pid);
       // check if we need to consolidate
-      if (check_split_node->delta_list_len > MAX_DELTA_CHAIN_LEN) {
+      if (!check_split_node->need_split()) {
         consolidate(check_split_pid);
-      }
-#endif
-
-      check_split_node = mapping_table.get(check_split_pid);
-#ifdef MY_PRINT_DEBUG
-      print_node_info(check_split_pid);
-#endif
-
-      // if now the path is empty and current node
-      // doesn't need splitting we stop split
-      if (path.empty() && !check_split_node->need_split()) {
         break;
       }
+#endif
     }
   }
 
@@ -1189,6 +1177,11 @@ class BWTree {
 #else
       Node* basic_node = mapping_table.get(basic_pid);
 #endif
+
+      if(!key_in_node(key, *basic_node)){
+        LOG_INFO("Insert meet structure change!");
+        continue;
+      }
 
       bool key_dup = key_is_in(key, basic_node);
 
@@ -1248,13 +1241,15 @@ class BWTree {
       // Check whether we need to consolidate, also check the correctness of
       // previous split
       Node* basic_node = consolidate(basic_pid);
-//TODO:find out why
-     // if(basic_node == nullptr) continue;
-// print_node_info(basic_pid);
 
 #else
       Node* basic_node = mapping_table.get(basic_pid);
 #endif
+
+      if(!key_in_node(key, *basic_node)){
+        LOG_INFO("Delete meet structure change!");
+        continue;
+      }
 
       auto tv_count_pair = count_pair(key, value, basic_node);
 
@@ -1265,6 +1260,7 @@ class BWTree {
 
       if (tv_count_pair.second > tv_count_pair.first) {
         LOG_ERROR("error!! count pair second > first");
+        assert(0);
       }
 
       bool deletekey = (tv_count_pair.second == tv_count_pair.first);
@@ -1344,6 +1340,7 @@ class BWTree {
 
         if (keys.size() != childs.size() - 1 || keys.size() > innerslotmax) {
           LOG_ERROR("wrong consolidated inner key size!");
+          assert(0);
         }
 
         int i;
@@ -1374,8 +1371,6 @@ class BWTree {
         LOG_ERROR("From consolidate: invalid split check");
         return nullptr;
       }
-
-      break;
     }
 
     return orinode;
@@ -1628,6 +1623,11 @@ class BWTree {
     *pivotal = new_leaf->slotkey[0];
     PidType new_leaf_pid = mapping_table.add(new_leaf);
 
+    if(new_leaf_pid == NULL_PID) {
+      LOG_ERROR("can't add new_leaf_pid");
+      assert(new_leaf_pid != NULL_PID);
+    }
+
     return new_leaf_pid;
   }
 
@@ -1652,6 +1652,11 @@ class BWTree {
 
     *pivotal = new_inner->slotkey[0];
     PidType new_inner_pid = mapping_table.add(new_inner);
+
+    if(new_inner_pid == NULL_PID) {
+      LOG_ERROR("can't add new_inner_pid");
+      assert(new_inner_pid != NULL_PID);
+    }
 
     return new_inner_pid;
   }
@@ -1748,7 +1753,7 @@ class BWTree {
   // print out necessary info for a node in readable manner (given Node*)
   void print_node_info(Node* node) {
     size_t total_len = node->delta_list_len;
-    printf("pid - %lld, delta_chain_len: %ld, slotuse: %d  ", node->pid,
+    printf("pid - %lld, delta_chain_len: %ld, slotuse: %d\n", node->pid,
            total_len, node->slotuse);
 
     // print out deltas added to this node in order
@@ -1761,7 +1766,7 @@ class BWTree {
   void print_node_info(PidType pid) {
     Node* node = mapping_table.get(pid);
     size_t total_len = node->delta_list_len;
-    printf("pid - %lld, delta_chain_len: %ld, slotuse: %d  ", pid, total_len,
+    printf("pid - %lld, delta_chain_len: %ld, slotuse: %d\n", pid, total_len,
            node->slotuse);
 
     // print out deltas added to this node in order

@@ -975,6 +975,7 @@ class BWTree {
     }
   }
 
+  // creaet a new root when splitting the current root
   void create_root(PidType cur_root, PidType new_node_pid,
                    KeyType pivotal){
     KeyType waste;
@@ -1006,6 +1007,7 @@ class BWTree {
     return;
   }
 
+  // find the parent of node that contains key
   Node* find_parent(KeyType key, std::stack<PidType>& path,
                     const std::vector<PidType>& visited_nodes){
     PidType parent_pid = path.top();
@@ -1105,14 +1107,13 @@ class BWTree {
       consolidate(check_split_pid);
 #endif
 
-      // Step 2, update our check_split_node as its parent (or create new root)
+      // Step 2, create new root if necessary
       if (path.empty()) {
         // create new root
         create_root(check_split_pid, new_node_pid, pivotal);
         return;
       }
 
-      // Step 1.2 update our check_split_node as its parent
       // Step 3 add indexEntryDelta to current check_split_node
       bool redo = true;
       while (redo) {
